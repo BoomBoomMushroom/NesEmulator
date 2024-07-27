@@ -9,7 +9,7 @@
 # Memory Map
 # https://www.nesdev.org/wiki/CPU_memory_map
 
-from BitwiseInts import Int8, UInt8, Int16, UInt16
+from BitwiseInts import Int8, UInt8, UInt16
 from RAM import RAM
 
 class Ricoh2A03:

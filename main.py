@@ -40,7 +40,7 @@ class NES():
         self.reset()
 
     def step(self):
-        cpuResponse = 0
+        cpuResponse = -2
         ppuResponse = 0
         
         ppuResponse = self.ppu.step()
@@ -58,6 +58,8 @@ console = NES()
 console.insertCartridge(nestestCartridge)
 
 isPaused = True
+unpausedForOneTick = False
+owedOneFrameOfUpdate = False
 
 def askToDumpCPUOutputLog():
     if input("Do you want to dump the CPU logs? (y/n) ") == "y":
@@ -65,7 +67,11 @@ def askToDumpCPUOutputLog():
         print(f"\n{outputLog}\n")
 
 def updateScreen():
-    if console.ppu.frameComplete == False: return
+    global owedOneFrameOfUpdate
+    if owedOneFrameOfUpdate == False:
+        if isPaused: screen.tick()
+        if console.ppu.frameComplete == False: return
+    else: owedOneFrameOfUpdate = False
     
     screen.drawStatusRegister( console.cpu.negativeFlag, console.cpu.overflowFlag, console.cpu.breakFlag, console.cpu.decimalModeFlag, console.cpu.interruptDisableFlag, console.cpu.zeroFlag, console.cpu.carryFlag )
     screen.drawRegisters(
@@ -78,13 +84,13 @@ def updateScreen():
     console.ppu.frameComplete = False
     screen.tick()
 
-screen.isPaused = isPaused
 while True:
+    if unpausedForOneTick: isPaused = False
     if screen.didQuit: break
-    isPaused = screen.isPaused
     if isPaused:
         updateScreen()
         continue
+        
     
     responses = console.step()
     if responses[0] == -1:
@@ -92,6 +98,15 @@ while True:
         with open("cpuOutputLog.txt", "w") as f: f.write(console.cpu.outputLog)
         askToDumpCPUOutputLog()
         break
+    elif responses[0] == -2:
+        # CPU didnt run. not it's clock cycle
+        pass
+    elif responses[0] == 0:
+        # CPU ran
+        if unpausedForOneTick:
+            isPaused = True
+            unpausedForOneTick = False
+            owedOneFrameOfUpdate = True
     
     updateScreen()
 

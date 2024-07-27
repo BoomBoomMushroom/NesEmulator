@@ -14,7 +14,6 @@ class Screen():
         self.fontSize = 32
         self.font = pygame.font.SysFont("Retro Gaming", 32)
         
-        self.isPaused = False
         self.didQuit = False
         
         self.queuedDraw = [
@@ -132,7 +131,11 @@ class Screen():
                 self.quit()
                 return
             elif event.type == pygame.KEYUP:
-                if event.key == pygame.K_SPACE: self.isPaused = self.isPaused != True
+                if event.key == pygame.K_SPACE:
+                    isPaused = getattr(sys.modules["__main__"], "isPaused")
+                    setattr(sys.modules["__main__"], "isPaused", isPaused==False)
+                if event.key == pygame.K_RIGHTBRACKET:
+                    setattr(sys.modules["__main__"], "unpausedForOneTick", True)
 
         for queued in self.queuedDraw:
             positionedRect: pygame.Rect = queued[0].get_rect(topleft=queued[1])
