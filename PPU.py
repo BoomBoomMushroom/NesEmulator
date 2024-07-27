@@ -23,7 +23,6 @@ class PPU:
         
         self.reset()
         
-        
         self.screen: WriteableScreen = self.console.screen
         self.frameComplete = False
         
@@ -98,8 +97,6 @@ class PPU:
             0x3E: (0,0,0),
             0x3F: (0,0,0),
         }
-        
-        self.reset()
     
     def step(self):
         # Some fake noise for now
@@ -203,14 +200,6 @@ class PPU:
                     f.write(str(pixel))
                 f.write("\n")
     
-    
-    def updatePPUStatus(self):        
-        binaryString = f"0b{1 if self.vblankFlag else 0}{1 if self.spriteZeroHitFlag else 0}{1 if self.spriteOverflowFlag else 0}00000"
-        PPUStatusAddress = UInt16(0x2002)
-        self.ram.writeAddress(PPUStatusAddress, int(binaryString, 2))
-        
-        self.mirrorRegisters()
-    
     def mirrorRegisters(self):
         dataToMirror = self.ram.readSpace(UInt16(0x2000), UInt16(0x2007)) # 8 bytes
         for newAddressStart in range(UInt16(0x2008).value, UInt16(0x3FFF).value, Int8(0x8).value):
@@ -218,6 +207,9 @@ class PPU:
             self.ram.writeSpace(UInt16(newAddressStart), selfOffsetAddress, dataToMirror)
     
     def readStatusRegister(self) -> int:
+        self.vblank = 1
+        self.updateStatusRegister()
+        
         value = self.status
         self.writeRegister(0x2002, self.status & 0x7F) # Clear VBLANK
         self.writeToggle = 0
@@ -260,7 +252,11 @@ class PPU:
         # Write to address in the RAM
         self.ram.writeAddress(UInt16(register), value)
         if mirrorRegisters: self.mirrorRegisters()
-        
+    
+    def updateStatusRegister(self):
+        binary = f"0b{self.vblank}{self.spriteZeroHit}{self.spriteOverflow}00000"
+        self.writeRegister(0x2002, int(binary, 2))
+    
     def reset(self):
         self.vram = bytearray(0x4000)
         self.oam = bytearray(256)
@@ -270,14 +266,20 @@ class PPU:
         self.fineX = 0
         self.writeToggle = 0
         
+        # PPU STATUS
+        self.status = 0x00
+        self.vblank = 0 # bit 7
+        self.spriteZeroHit = 0 # bit 6
+        self.spriteOverflow = 0 # bit 5
+        
         self.writeRegister(0x2000, 0)
         self.writeRegister(0x2001, 0)
-        self.writeRegister(0x2002, 0)
+        self.updateStatusRegister()
         self.writeRegister(0x2003, 0)
         self.writeRegister(0x2005, 0)
         self.writeRegister(0x2006, 0, True)
         
-        self.scanline = 0 
+        self.scanline = 0
         self.cycle = 0
         
         # Pattern table 1 = 0x0000 -> 0x0FFF (VRAM)

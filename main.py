@@ -76,9 +76,9 @@ def updateScreen():
     screen.drawStatusRegister( console.cpu.negativeFlag, console.cpu.overflowFlag, console.cpu.breakFlag, console.cpu.decimalModeFlag, console.cpu.interruptDisableFlag, console.cpu.zeroFlag, console.cpu.carryFlag )
     screen.drawRegisters(
         f"${console.cpu.pc.getHex()}     ",
-        f"${console.cpu.accumulatorRegister.getHex()}  [{console.cpu.accumulatorRegister.getWriteableInt()}]     ",
-        f"${console.cpu.XRegister.getHex()}  [{console.cpu.XRegister.getWriteableInt()}]     ",
-        f"${console.cpu.YRegister.getHex()}  [{console.cpu.YRegister.getWriteableInt()}]     ",
+        f"${console.cpu.accumulatorRegister.getHex()}  [{console.cpu.accumulatorRegister.getWriteableInt()}]               ",
+        f"${console.cpu.XRegister.getHex()}  [{console.cpu.XRegister.getWriteableInt()}]               ",
+        f"${console.cpu.YRegister.getHex()}  [{console.cpu.YRegister.getWriteableInt()}]               ",
         f"$00{console.cpu.stackPointer.getHex()}" )
     if console.ppu.frameComplete: screen.updateScreen(console.screen)
     console.ppu.frameComplete = False

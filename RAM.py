@@ -9,6 +9,8 @@ class RAM:
         if address.value == 0x2002: return self.console.ppu.readStatusRegister()
         return self.memory[address.value]
     def writeAddress(self, address: UInt16, byte):
+        if address.value >= 0x2000 and address.value <= 0x200F:
+            print(address, byte, hex(byte))
         self.memory[address.value] = byte
     
 
