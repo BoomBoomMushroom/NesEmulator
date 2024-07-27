@@ -40,14 +40,14 @@ class NES():
         self.reset()
 
     def step(self):
-        self.totalCycles += 1
         cpuResponse = 0
         ppuResponse = 0
         
-        if self.ppu.scanline >= 241:
-            cpuResponse = self.cpu.step()
         ppuResponse = self.ppu.step()
+        if self.totalCycles % 3 == 0:
+            cpuResponse = self.cpu.step()
         
+        self.totalCycles += 1
         return (cpuResponse, ppuResponse, 0)
 
 nestestCartridge = Cartridge("nestest.nes")
