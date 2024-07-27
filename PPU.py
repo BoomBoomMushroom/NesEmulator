@@ -1,5 +1,8 @@
 from RAM import RAM
-from BitwiseInts import Int8, UInt8, Int16, UInt16
+from BitwiseInts import Int8, UInt8, UInt16
+from Screen import WriteableScreen
+
+import copy
 
 # Power Up Memory
 # https://www.nesdev.org/wiki/PPU_power_up_state
@@ -11,9 +14,6 @@ from BitwiseInts import Int8, UInt8, Int16, UInt16
 #   0x2000 -> 0x2007 | 8 bytes in size
 # Mirrors of PPU registers
 #   0x2008 -> 0x3FFF | Repeat every 8 bytes
-
-from BitwiseInts import Int8, UInt8, UInt16, UInt16
-from Screen import WriteableScreen
 
 class PPU:
     def __init__(self, console) -> None:
@@ -29,9 +29,11 @@ class PPU:
         
         self.nameTables: list[bytearray] = [bytearray(1024)] * 2  # two 1KB name tables (https://youtu.be/xdzOvpYPmGE?list=PLrOv9FMX8xJHqMvSGB_9G9nZZ_4IgteYf&t=807)
         self.paletteTable: bytearray = bytearray(32)
-        self.patternTable: list[bytearray] = [bytearray(4096)] * 2  # two 4 KB pattern tables (https://youtu.be/xdzOvpYPmGE?list=PLrOv9FMX8xJHqMvSGB_9G9nZZ_4IgteYf&t=835)
-        # ^^ pattern table reminder ^^ (https://youtu.be/xdzOvpYPmGE?list=PLrOv9FMX8xJHqMvSGB_9G9nZZ_4IgteYf&t=872)
         
+        patternTableSize = (128, 128)
+        numOfPatternTables = 2
+        self.patternTable: list[bytearray] = [[[0 for x in range(patternTableSize[0])] for y in range(patternTableSize[1])] for tbl in range(numOfPatternTables)]  # two 4 KB pattern tables (https://youtu.be/xdzOvpYPmGE?list=PLrOv9FMX8xJHqMvSGB_9G9nZZ_4IgteYf&t=835)
+        # ^^ pattern table reminder ^^ (https://youtu.be/xdzOvpYPmGE?list=PLrOv9FMX8xJHqMvSGB_9G9nZZ_4IgteYf&t=872)
         
         # Pattern memory
         #   0x0000 -> 0x1FFF (8KB)
@@ -136,7 +138,8 @@ class PPU:
         
         return 0
     
-    def readData(self, address: UInt16):
+    def readData(self, address: int):
+        if type(address) != int: address = address.value
         data: UInt8 = 0x00
         
         if address == 0x0000: # Control
@@ -186,8 +189,8 @@ class PPU:
             for tileX in range(16):
                 offset = tileY * 256 + tileX * 16
                 for row in range(8):
-                    tileLSB = self.ram.readAddress(UInt16(tableIndex * 0x1000 + offset + row + 0))
-                    tileMSB = self.ram.readAddress(UInt16(tableIndex * 0x1000 + offset + row + 8))
+                    tileLSB = self.readData(tableIndex * 0x1000 + offset + row + 0)
+                    tileMSB = self.readData(tableIndex * 0x1000 + offset + row + 8)
                     
                     for col in range(8):
                         pixel = (tileLSB & 0x01) + (tileMSB & 0x01)
@@ -195,10 +198,9 @@ class PPU:
                         tileMSB >>= 1
                         
                         #print(pixel, hex(pixel))
-                        #self.patternTable[tableIndex].setPixel(
-                        #    tileX * 8 + (7 - col),
-                        #    tileY * 8 + row
-                        #)
+                        patternX = tileX * 8 + (7 - col)
+                        patternY = tileY * 8 + row
+                        self.patternTable[tableIndex][patternX][patternY] = pixel
         
         return self.patternTable[tableIndex]
     
