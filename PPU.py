@@ -35,13 +35,6 @@ class PPU:
         self.patternTable: list[bytearray] = [[[0 for x in range(patternTableSize[0])] for y in range(patternTableSize[1])] for tbl in range(numOfPatternTables)]  # two 4 KB pattern tables (https://youtu.be/xdzOvpYPmGE?list=PLrOv9FMX8xJHqMvSGB_9G9nZZ_4IgteYf&t=835)
         # ^^ pattern table reminder ^^ (https://youtu.be/xdzOvpYPmGE?list=PLrOv9FMX8xJHqMvSGB_9G9nZZ_4IgteYf&t=872)
         
-        # Pattern memory
-        #   0x0000 -> 0x1FFF (8KB)
-        # Name Table
-        #   0x2000 -> 0x2FFF (2KB)
-        # Palettes
-        #   0x3F00 -> 0x3FFF
-        
         # Pygame colors
         # using 2C02 colors. First one on https://www.nesdev.org/wiki/PPU_palettes
         self.colors = {
@@ -138,48 +131,36 @@ class PPU:
         
         return 0
     
-    def readData(self, address: int):
+    # Pattern memory
+    #   0x0000 -> 0x1FFF (8KB)
+    # Name Table
+    #   0x2000 -> 0x2FFF (2KB)
+    # Palettes
+    #   0x3F00 -> 0x3FFF
+    
+    def PPU_Read(self, address: int):
         if type(address) != int: address = address.value
         data: UInt8 = 0x00
+
+        if address >= 0x0000 and address <= 0x1FFF:
+            pass
+        elif address >= 0x2000 and address <= 0x2FFF:
+            pass
+        elif address >= 0x3F00 and address <= 0x3FFF:
+            address &= 0x001F
+            if address == 0x0010: address = 0x0000
+            if address == 0x0014: address = 0x0004
+            if address == 0x0018: address = 0x0008
+            if address == 0x001C: address = 0x000C
         
-        if address == 0x0000: # Control
-            pass
-        if address == 0x0001: # Mask
-            pass
-        if address == 0x0002: # Status
-            pass
-        if address == 0x0003: # OAM Address
-            pass
-        if address == 0x0004: # OAM Data
-            pass
-        if address == 0x0005: # Scroll
-            pass
-        if address == 0x0006: # PPU Address
-            pass
-        if address == 0x0007: # PPU Data
-            pass
+        return address
         
         return data
     
-    def writeData(self, address: UInt16):
+    def PPU_Write(self, address: int):
+        if type(address) != int: address = address.value
         data: UInt8 = 0x00
         
-        if address == 0x0000: # Control
-            pass
-        if address == 0x0001: # Mask
-            pass
-        if address == 0x0002: # Status
-            pass
-        if address == 0x0003: # OAM Address
-            pass
-        if address == 0x0004: # OAM Data
-            pass
-        if address == 0x0005: # Scroll
-            pass
-        if address == 0x0006: # PPU Address
-            pass
-        if address == 0x0007: # PPU Data
-            pass
         
         return data
     
@@ -189,8 +170,8 @@ class PPU:
             for tileX in range(16):
                 offset = tileY * 256 + tileX * 16
                 for row in range(8):
-                    tileLSB = self.readData(tableIndex * 0x1000 + offset + row + 0)
-                    tileMSB = self.readData(tableIndex * 0x1000 + offset + row + 8)
+                    tileLSB = self.PPU_Read(tableIndex * 0x1000 + offset + row + 0)
+                    tileMSB = self.PPU_Read(tableIndex * 0x1000 + offset + row + 8)
                     
                     for col in range(8):
                         pixel = (tileLSB & 0x01) + (tileMSB & 0x01)
@@ -204,8 +185,8 @@ class PPU:
         
         return self.patternTable[tableIndex]
     
-    def getColorFromPaletteRam(self, palette, pixel):
-        pass
+    def getColorFromPaletteRam(self, palette: int, pixel: int):
+        return self.PPU_Read(0x3F00 + (palette << 2) + pixel)
     
     
     def updatePPUStatus(self):        
