@@ -37,8 +37,6 @@ class NES():
         self.cartridge = cartridge
         self.cartridge.writePRGToRam(self.ram)
         
-        self.ppu.getPatternTable(1, 0)
-        
         self.reset()
 
     def step(self):

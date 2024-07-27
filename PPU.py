@@ -108,9 +108,31 @@ class PPU:
             0x3F: (0,0,0),
         }
         
-        self.vblankFlag = False          # 0 = not in vblank, 1 = in vblank
-        self.spriteZeroHitFlag = False  # set when a nonzero pixel of sprite 0 overlaps a nonzero background pixel; cleared at dot 1 of the pre-render line. Used for raster timing.
-        self.spriteOverflowFlag = True  # https://www.nesdev.org/wiki/PPU_sprite_evaluation
+        
+        # Status
+        self.spriteOverflowFlag = 0  # https://www.nesdev.org/wiki/PPU_sprite_evaluation
+        self.spriteZeroHitFlag = 0  # set when a nonzero pixel of sprite 0 overlaps a nonzero background pixel; cleared at dot 1 of the pre-render line. Used for raster timing.
+        self.vblankFlag = 0          # 0 = not in vblank, 1 = in vblank
+        
+        # Registers
+        self.grayscale = 0
+        self.renderBackgroundLeft = 1
+        self.renderSpritesLeft = 1
+        self.renderBackground = 1
+        self.renderSprites = 1
+        self.enhanceRed = 0
+        self.enhanceGreen = 0
+        self.enhanceBlue = 0
+        
+        # PPU Control
+        self.nametableX = 0
+        self.nametableY = 0
+        self.incrementMode = 0
+        self.patternSprite = 0
+        self.patternBackground = 0
+        self.spriteSize = 0
+        self.slaveMode = 0 # unused
+        self.enableNMI = 0
         
         #self.atPowerRegisters()
     
@@ -146,24 +168,17 @@ class PPU:
         if type(address) != int: address = address.value
         data: int = 0x00
 
-        print(address)
-        dataFromCHR = self.readFromCartridgeCHR(address)
-        print(dataFromCHR)
-        return dataFromCHR
+        #print(hex(address))
 
         if address >= 0x0000 and address <= 0x1FFF:
-            data = self.patternTable[(address & 0x1000) >> 12][address & 0x0FFF]
+            data = self.readFromCartridgeCHR(address)
         elif address >= 0x2000 and address <= 0x2FFF:
             pass
         elif address >= 0x3F00 and address <= 0x3FFF:
-            address &= 0x001F
-            if address == 0x0010: address = 0x0000
-            if address == 0x0014: address = 0x0004
-            if address == 0x0018: address = 0x0008
-            if address == 0x001C: address = 0x000C
-            data = self.paletteTable[address]
+            data = self.readFromCartridgeCHR(address)
+            #data = self.paletteTable[address]
         
-        print(address)
+        #print(hex(address))
         
         return data
     
@@ -203,11 +218,17 @@ class PPU:
                         #print(pixel, hex(pixel))
                         patternX = tileX * 8 + (7 - col)
                         patternY = tileY * 8 + row
-                        self.patternTable[tableIndex][patternX][patternY] = pixel
+                        pixelColor = self.getColorFromPaletteRam(palette, pixel)
+                        
+                        self.patternTable[tableIndex][patternX][patternY] = pixelColor
         
-        self.patternTableToString(tableIndex)
+       # self.patternTableToString(tableIndex)
         
         return self.patternTable[tableIndex]
+    
+    def getColorFromPaletteRam(self, palette: int, pixel: int):
+        return self.PPU_Read(0x3F00 + (palette << 2) + pixel)
+    
     
     def patternTableToString(self, tableIndex):
         table = self.patternTable[tableIndex]
@@ -216,9 +237,6 @@ class PPU:
                 for pixel in row:
                     f.write(str(pixel))
                 f.write("\n")
-    
-    def getColorFromPaletteRam(self, palette: int, pixel: int):
-        return self.PPU_Read(0x3F00 + (palette << 2) + pixel)
     
     
     def updatePPUStatus(self):        
