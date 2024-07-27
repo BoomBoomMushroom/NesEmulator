@@ -1,6 +1,7 @@
 from RAM import RAM
 from BitwiseInts import Int8, UInt8, UInt16
 from Screen import WriteableScreen
+from Cartridge import Cartridge
 
 import copy
 
@@ -107,7 +108,6 @@ class PPU:
             0x3F: (0,0,0),
         }
         
-        
         self.vblankFlag = False          # 0 = not in vblank, 1 = in vblank
         self.spriteZeroHitFlag = False  # set when a nonzero pixel of sprite 0 overlaps a nonzero background pixel; cleared at dot 1 of the pre-render line. Used for raster timing.
         self.spriteOverflowFlag = True  # https://www.nesdev.org/wiki/PPU_sprite_evaluation
@@ -131,6 +131,10 @@ class PPU:
         
         return 0
     
+    def readFromCartridgeCHR(self, address):
+        cartridge: Cartridge = self.console.cartridge
+        cartridge.CHRMemory[address]
+    
     # Pattern memory
     #   0x0000 -> 0x1FFF (8KB)
     # Name Table
@@ -140,7 +144,12 @@ class PPU:
     
     def PPU_Read(self, address: int):
         if type(address) != int: address = address.value
-        data: UInt8 = 0x00
+        data: int = 0x00
+
+        print(address)
+        dataFromCHR = self.readFromCartridgeCHR(address)
+        print(dataFromCHR)
+        return dataFromCHR
 
         if address >= 0x0000 and address <= 0x1FFF:
             data = self.patternTable[(address & 0x1000) >> 12][address & 0x0FFF]
@@ -153,6 +162,8 @@ class PPU:
             if address == 0x0018: address = 0x0008
             if address == 0x001C: address = 0x000C
             data = self.paletteTable[address]
+        
+        print(address)
         
         return data
     
@@ -175,7 +186,8 @@ class PPU:
         return data
     
     
-    def getPatternTable(self, tableIndex):
+    
+    def getPatternTable(self, tableIndex: int, palette: int):
         for tileY in range(16):
             for tileX in range(16):
                 offset = tileY * 256 + tileX * 16

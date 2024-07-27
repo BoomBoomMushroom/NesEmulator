@@ -15,6 +15,7 @@ class Screen():
         self.font = pygame.font.SysFont("Retro Gaming", 32)
         
         self.isPaused = False
+        self.didQuit = False
         
         self.queuedDraw = [
             [self.font.render("STATUS:", False, (255,255,255)), (512,self.fontSize*0)],
@@ -144,7 +145,7 @@ class Screen():
 
     def quit(self):
         pygame.quit()
-        sys.exit()
+        self.didQuit = True
 
 
 class WriteableScreen():

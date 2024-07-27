@@ -37,6 +37,8 @@ class NES():
         self.cartridge = cartridge
         self.cartridge.writePRGToRam(self.ram)
         
+        self.ppu.getPatternTable(0, 0)
+        
         self.reset()
 
     def step(self):
@@ -79,6 +81,7 @@ def updateScreen():
     screen.tick()
 
 while True:
+    if screen.didQuit: break
     isPaused = screen.isPaused
     if isPaused:
         updateScreen()

@@ -37,7 +37,6 @@ class Cartridge():
             RAM.writeSpace(UInt16(0x8000), UInt16(0xFFFF), prgAsBytes)
     
     
-    
     def loadFile(self):
         with open(self.filePath, "rb") as f:
             header: bytes = f.read(0x10) # read first line, 16 bytes
@@ -71,6 +70,8 @@ class Cartridge():
                 self.CHRBanks = self.chrRomChunks
                 self.CHRMemory = bytearray(self.CHRBanks * 8192)
                 f.readinto(self.CHRMemory)
+                
+                print(self.CHRMemory)
             
             elif fileType == 2:
                 pass
