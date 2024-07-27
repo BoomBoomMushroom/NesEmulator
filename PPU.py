@@ -20,21 +20,12 @@ class PPU:
     def __init__(self, console) -> None:
         self.console = console
         self.ram: RAM = self.console.ram
+        
+        self.reset()
+        
+        
         self.screen: WriteableScreen = self.console.screen
-        
-        self.allNESColors = []
-        
-        self.scanline = 0
-        self.cycle = 0
         self.frameComplete = False
-        
-        self.nameTables: list[bytearray] = [bytearray(1024)] * 2  # two 1KB name tables (https://youtu.be/xdzOvpYPmGE?list=PLrOv9FMX8xJHqMvSGB_9G9nZZ_4IgteYf&t=807)
-        self.paletteTable: bytearray = bytearray(32)
-        
-        patternTableSize = (128, 128)
-        numOfPatternTables = 2
-        self.patternTable: list[bytearray] = [[[0 for x in range(patternTableSize[0])] for y in range(patternTableSize[1])] for tbl in range(numOfPatternTables)]  # two 4 KB pattern tables (https://youtu.be/xdzOvpYPmGE?list=PLrOv9FMX8xJHqMvSGB_9G9nZZ_4IgteYf&t=835)
-        # ^^ pattern table reminder ^^ (https://youtu.be/xdzOvpYPmGE?list=PLrOv9FMX8xJHqMvSGB_9G9nZZ_4IgteYf&t=872)
         
         # Pygame colors
         # using 2C02 colors. First one on https://www.nesdev.org/wiki/PPU_palettes
@@ -108,33 +99,7 @@ class PPU:
             0x3F: (0,0,0),
         }
         
-        
-        # Status
-        self.spriteOverflowFlag = 0  # https://www.nesdev.org/wiki/PPU_sprite_evaluation
-        self.spriteZeroHitFlag = 0  # set when a nonzero pixel of sprite 0 overlaps a nonzero background pixel; cleared at dot 1 of the pre-render line. Used for raster timing.
-        self.vblankFlag = 0          # 0 = not in vblank, 1 = in vblank
-        
-        # Registers
-        self.grayscale = 0
-        self.renderBackgroundLeft = 1
-        self.renderSpritesLeft = 1
-        self.renderBackground = 1
-        self.renderSprites = 1
-        self.enhanceRed = 0
-        self.enhanceGreen = 0
-        self.enhanceBlue = 0
-        
-        # PPU Control
-        self.nametableX = 0
-        self.nametableY = 0
-        self.incrementMode = 0
-        self.patternSprite = 0
-        self.patternBackground = 0
-        self.spriteSize = 0
-        self.slaveMode = 0 # unused
-        self.enableNMI = 0
-        
-        #self.atPowerRegisters()
+        self.reset()
     
     def step(self):
         # Some fake noise for now
@@ -252,25 +217,68 @@ class PPU:
             selfOffsetAddress: UInt16 = UInt16(newAddressStart) + 0x8
             self.ram.writeSpace(UInt16(newAddressStart), selfOffsetAddress, dataToMirror)
     
-    #; ? = unknown, x = irrelevant, + = often set, U = unchanged
-    def atPowerRegisters(self):
-        self.ram.writeAddress(UInt16(0x2000), 0b0000_0000)  # PPUCTRL
-        self.ram.writeAddress(UInt16(0x2001), 0b0000_0000)  # PPUMASK
-        self.ram.writeAddress(UInt16(0x2002), 0b1010_0000)  # PPUSTATUS ~ +0+x xxxx
-        self.ram.writeAddress(UInt16(0x2003), 0b00)         # OAMADDR
-        self.ram.writeAddress(UInt16(0x2005), 0b0000)       # PPUSCROLL
-        self.ram.writeAddress(UInt16(0x2006), 0b0000)       # PPUADDR
-        self.ram.writeAddress(UInt16(0x2007), 0b00)         # PPUDATA
+    def readStatusRegister(self) -> int:
+        value = self.status
+        self.writeRegister(0x2002, self.status & 0x7F) # Clear VBLANK
+        self.writeToggle = 0
+        return value
+    
+    def writeRegister(self, register, value):
+        if register == 0x2000:
+            self.ctrl = value
+        elif register == 0x2001:
+            self.mask = value
+        elif register == 0x2002:
+            self.status = value
+        elif register == 0x2003:
+            self.address = value
+        elif register == 0x2004:
+            self.oam[self.address] = value
+            self.address += 1
+        elif register == 0x2005:
+            if self.writeToggle == 0:
+                self.scroll = value
+                self.writeToggle = 1
+            else:
+                self.scroll = (self.scroll << 8) | value
+                self.writeToggle = 0
+            value = self.scroll
+        elif register == 0x2006:
+            if self.writeToggle == 0:
+                self.address = (self.address & 0x00FF) | (value << 8)
+                self.writeToggle = 1
+            else:
+                self.address = (self.address & 0xFF00) | value
+                self.writeToggle = 0
+        elif register == 0x2007:
+            self.vram[self.address] = value
+            self.address += 1
+        else:
+            raise ValueError # Register not found
+        
+        # Write to address in the RAM
+        self.ram.writeAddress(UInt16(register), value)
+        self.mirrorRegisters()
         
     def reset(self):
-        self.ram.writeAddress(UInt16(0x2000), 0b0000_0000)  # PPUCTRL
-        self.ram.writeAddress(UInt16(0x2001), 0b0000_0000)  # PPUMASK
+        self.vram = bytearray(0x4000)
+        self.oam = bytearray(256)
         
-        statusMSB = self.ram.readAddress(UInt16(0x2002)) >> 8        # MSB is unchanged
-        self.ram.writeAddress(UInt16(0x2002), int(f"0b{statusMSB}110_0000", 2))  # PPUSTATUS ~ U??x xxxx
+        self.vramAddress = 0
+        self.tempVramAddress = 0
+        self.fineX = 0
+        self.writeToggle = 0
         
-        # self.ram.writeAddress(UInt16(0x2003), 0b00)       # OAMADDR   ~ unchanged
-        self.ram.writeAddress(UInt16(0x2005), 0b0000)       # PPUSCROLL
-        #self.ram.writeAddress(UInt16(0x2006), 0b0000)      # PPUADDR   ~ unchanged
-        self.ram.writeAddress(UInt16(0x2007), 0b00)         # PPUDATA
+        self.writeRegister(0x2000, 0)
+        self.writeRegister(0x2001, 0)
+        self.writeRegister(0x2002, 0)
+        self.writeRegister(0x2003, 0)
+        self.writeRegister(0x2005, 0)
+        self.writeRegister(0x2006, 0)
         
+        self.scanline = 0 
+        self.cycle = 0
+        
+        self.nameTable = [0] * 0x1000
+        self.patternTable = [0] * 0x2000 # 0x0000 -> 0x0FFF is pattern tbl 1 and 0x1000 to 0x1FFFF is pattern tbl 2
+        self.paletteTable = [0] * 32

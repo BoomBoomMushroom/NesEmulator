@@ -14,7 +14,7 @@ from Screen import Screen, WriteableScreen
 
 class NES():
     def __init__(self) -> None:
-        self.ram = RAM(1024 * 64) # 64 KB of memory
+        self.ram = RAM(self, 1024 * 64) # 64 KB of memory
         
         self.totalCycles = 0
         
@@ -57,7 +57,7 @@ console = NES()
 #console.loadROM(romDataBinary)
 console.insertCartridge(nestestCartridge)
 
-isPaused = False
+isPaused = True
 
 def askToDumpCPUOutputLog():
     if input("Do you want to dump the CPU logs? (y/n) ") == "y":
@@ -78,6 +78,7 @@ def updateScreen():
     console.ppu.frameComplete = False
     screen.tick()
 
+screen.isPaused = isPaused
 while True:
     if screen.didQuit: break
     isPaused = screen.isPaused

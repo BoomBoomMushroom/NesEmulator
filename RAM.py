@@ -1,10 +1,12 @@
-from BitwiseInts import Int8, UInt8, Int16, UInt16
+from BitwiseInts import UInt16
 
 class RAM:
-    def __init__(self, bytesAmount, fillValue=0x0) -> None:
+    def __init__(self, console, bytesAmount, fillValue=0x0) -> None:
         self.memory = bytearray([fillValue] * bytesAmount)
+        self.console = console
     
     def readAddress(self, address: UInt16):
+        if address.value == 0x2002: return self.console.ppu.readStatusRegister()
         return self.memory[address.value]
     def writeAddress(self, address: UInt16, byte):
         self.memory[address.value] = byte

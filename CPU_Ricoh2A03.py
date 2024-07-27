@@ -2949,7 +2949,7 @@ class Ricoh2A03:
     
     
     
-    def empty(self): pass
+    def empty(self): return 0
     
     # Decoding!
     
