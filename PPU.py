@@ -223,7 +223,7 @@ class PPU:
         self.writeToggle = 0
         return value
     
-    def writeRegister(self, register, value):
+    def writeRegister(self, register, value, mirrorRegisters: bool = False):
         if register == 0x2000:
             self.ctrl = value
         elif register == 0x2001:
@@ -253,12 +253,13 @@ class PPU:
         elif register == 0x2007:
             self.vram[self.address] = value
             self.address += 1
+            return
         else:
             raise ValueError # Register not found
         
         # Write to address in the RAM
         self.ram.writeAddress(UInt16(register), value)
-        self.mirrorRegisters()
+        if mirrorRegisters: self.mirrorRegisters()
         
     def reset(self):
         self.vram = bytearray(0x4000)
@@ -274,11 +275,17 @@ class PPU:
         self.writeRegister(0x2002, 0)
         self.writeRegister(0x2003, 0)
         self.writeRegister(0x2005, 0)
-        self.writeRegister(0x2006, 0)
+        self.writeRegister(0x2006, 0, True)
         
         self.scanline = 0 
         self.cycle = 0
         
-        self.nameTable = [0] * 0x1000
-        self.patternTable = [0] * 0x2000 # 0x0000 -> 0x0FFF is pattern tbl 1 and 0x1000 to 0x1FFFF is pattern tbl 2
-        self.paletteTable = [0] * 32
+        # Pattern table 1 = 0x0000 -> 0x0FFF (VRAM)
+        # Pattern table 2 = 0x1000 -> 0x1FFF (VRAM)
+        
+        # Name Table 1 = 0x2000 -> 0x23FF (VRAM)
+        # Name Table 2 = 0x2400 -> 0x27FF (VRAM)
+        # Name Table 3 = 0x2800 -> 0x2BFF (VRAM)
+        # Name Table 4 = 0x2C00 -> 0x2FFF (VRAM)
+        
+        # Palette Table = 0x3F00 -> 0x3FFF (VRAM)

@@ -90,7 +90,6 @@ while True:
     if isPaused:
         updateScreen()
         continue
-        
     
     responses = console.step()
     if responses[0] == -1:
