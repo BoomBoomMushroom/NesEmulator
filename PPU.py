@@ -133,7 +133,7 @@ class PPU:
     
     def readFromCartridgeCHR(self, address):
         cartridge: Cartridge = self.console.cartridge
-        cartridge.CHRMemory[address]
+        return cartridge.CHRMemory[address]
     
     # Pattern memory
     #   0x0000 -> 0x1FFF (8KB)

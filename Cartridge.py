@@ -70,8 +70,6 @@ class Cartridge():
                 self.CHRBanks = self.chrRomChunks
                 self.CHRMemory = bytearray(self.CHRBanks * 8192)
                 f.readinto(self.CHRMemory)
-                
-                print(self.CHRMemory)
             
             elif fileType == 2:
                 pass
