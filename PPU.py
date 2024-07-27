@@ -205,7 +205,17 @@ class PPU:
                         patternY = tileY * 8 + row
                         self.patternTable[tableIndex][patternX][patternY] = pixel
         
+        self.patternTableToString(tableIndex)
+        
         return self.patternTable[tableIndex]
+    
+    def patternTableToString(self, tableIndex):
+        table = self.patternTable[tableIndex]
+        with open("patternTable.txt", "w") as f:
+            for row in table:
+                for pixel in row:
+                    f.write(str(pixel))
+                f.write("\n")
     
     def getColorFromPaletteRam(self, palette: int, pixel: int):
         return self.PPU_Read(0x3F00 + (palette << 2) + pixel)

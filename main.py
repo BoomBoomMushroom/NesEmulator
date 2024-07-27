@@ -37,7 +37,7 @@ class NES():
         self.cartridge = cartridge
         self.cartridge.writePRGToRam(self.ram)
         
-        self.ppu.getPatternTable(0, 0)
+        self.ppu.getPatternTable(1, 0)
         
         self.reset()
 
