@@ -29,7 +29,7 @@ class PPU:
         
         self.nameTables: list[bytearray] = [bytearray(1024)] * 2  # two 1KB name tables (https://youtu.be/xdzOvpYPmGE?list=PLrOv9FMX8xJHqMvSGB_9G9nZZ_4IgteYf&t=807)
         self.paletteTable: bytearray = bytearray(32)
-        self.patternTable: list[bytearray] = bytearray(4096) * 2  # two 4 KB pattern tables (https://youtu.be/xdzOvpYPmGE?list=PLrOv9FMX8xJHqMvSGB_9G9nZZ_4IgteYf&t=835)
+        self.patternTable: list[bytearray] = [bytearray(4096)] * 2  # two 4 KB pattern tables (https://youtu.be/xdzOvpYPmGE?list=PLrOv9FMX8xJHqMvSGB_9G9nZZ_4IgteYf&t=835)
         # ^^ pattern table reminder ^^ (https://youtu.be/xdzOvpYPmGE?list=PLrOv9FMX8xJHqMvSGB_9G9nZZ_4IgteYf&t=872)
         
         
@@ -180,6 +180,30 @@ class PPU:
         
         return data
     
+    
+    def getPatternTable(self, tableIndex):
+        for tileY in range(16):
+            for tileX in range(16):
+                offset = tileY * 256 + tileX * 16
+                for row in range(8):
+                    tileLSB = self.ram.readAddress(UInt16(tableIndex * 0x1000 + offset + row + 0))
+                    tileMSB = self.ram.readAddress(UInt16(tableIndex * 0x1000 + offset + row + 8))
+                    
+                    for col in range(8):
+                        pixel = (tileLSB & 0x01) + (tileMSB & 0x01)
+                        tileLSB >>= 1
+                        tileMSB >>= 1
+                        
+                        #print(pixel, hex(pixel))
+                        #self.patternTable[tableIndex].setPixel(
+                        #    tileX * 8 + (7 - col),
+                        #    tileY * 8 + row
+                        #)
+        
+        return self.patternTable[tableIndex]
+    
+    def getColorFromPaletteRam(self, palette, pixel):
+        pass
     
     
     def updatePPUStatus(self):        

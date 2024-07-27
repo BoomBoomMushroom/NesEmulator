@@ -112,7 +112,7 @@ class Screen():
         #FPS = round(1/(((now-self.lastFrame)//1_000_000)*0.001))
         #print(f"Time to generate frame: {self.ns_to_ss_ms(now-self.lastFrame)} ~ FPS: {FPS}")
         
-        sys.exit()
+        #sys.exit()
         
         # Draw NES screen
         for x in range(len(screenFromNES.pixels)):
