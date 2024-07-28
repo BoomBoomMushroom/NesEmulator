@@ -21,12 +21,12 @@ class PPU:
         self.console = console
         self.ram: RAM = self.console.ram
         
-        self.reset()
+        #self.reset()
         
         self.screen: WriteableScreen = self.console.screen
         self.frameComplete = False
         
-        # Pygame colors
+        # PyGame colors
         # using 2C02 colors. First one on https://www.nesdev.org/wiki/PPU_palettes
         self.colors = {
             0x00: (98,98,98),
@@ -104,6 +104,7 @@ class PPU:
         
         #print(f"{self.cycle-1} / 341 ; {self.scanline} / 261 ; {341*261}")
         
+        
         self.cycle += 1
         if self.cycle >= 341:
             self.cycle = 0
@@ -113,11 +114,9 @@ class PPU:
                 self.scanline = -1
                 self.frameComplete = True
         
+        self.updateStatusRegister()
+        
         return 0
-    
-    def readFromCartridgeCHR(self, address):
-        cartridge: Cartridge = self.console.cartridge
-        return cartridge.CHRMemory[address]
     
     # Pattern memory
     #   0x0000 -> 0x1FFF (8KB)
@@ -126,80 +125,6 @@ class PPU:
     # Palettes
     #   0x3F00 -> 0x3FFF
     
-    def PPU_Read(self, address: int):
-        if type(address) != int: address = address.value
-        data: int = 0x00
-
-        #print(hex(address))
-
-        if address >= 0x0000 and address <= 0x1FFF:
-            data = self.readFromCartridgeCHR(address)
-        elif address >= 0x2000 and address <= 0x2FFF:
-            pass
-        elif address >= 0x3F00 and address <= 0x3FFF:
-            data = self.readFromCartridgeCHR(address)
-            #data = self.paletteTable[address]
-        
-        #print(hex(address))
-        
-        return data
-    
-    def PPU_Write(self, address: int, data: int):
-        if type(address) != int: address = address.value
-        data: UInt8 = 0x00
-        
-        if address >= 0x0000 and address <= 0x1FFF:
-            self.patternTable[(address & 0x1000) >> 12][address & 0x0FFF] = data
-        elif address >= 0x2000 and address <= 0x2FFF:
-            pass
-        elif address >= 0x3F00 and address <= 0x3FFF:
-            address &= 0x001F
-            if address == 0x0010: address = 0x0000
-            if address == 0x0014: address = 0x0004
-            if address == 0x0018: address = 0x0008
-            if address == 0x001C: address = 0x000C
-            self.paletteTable[address] = data
-        
-        return data
-    
-    
-    
-    def getPatternTable(self, tableIndex: int, palette: int):
-        for tileY in range(16):
-            for tileX in range(16):
-                offset = tileY * 256 + tileX * 16
-                for row in range(8):
-                    tileLSB = self.PPU_Read(tableIndex * 0x1000 + offset + row + 0)
-                    tileMSB = self.PPU_Read(tableIndex * 0x1000 + offset + row + 8)
-                    
-                    for col in range(8):
-                        pixel = (tileLSB & 0x01) + (tileMSB & 0x01)
-                        tileLSB >>= 1
-                        tileMSB >>= 1
-                        
-                        #print(pixel, hex(pixel))
-                        patternX = tileX * 8 + (7 - col)
-                        patternY = tileY * 8 + row
-                        pixelColor = self.getColorFromPaletteRam(palette, pixel)
-                        
-                        self.patternTable[tableIndex][patternX][patternY] = pixelColor
-        
-       # self.patternTableToString(tableIndex)
-        
-        return self.patternTable[tableIndex]
-    
-    def getColorFromPaletteRam(self, palette: int, pixel: int):
-        return self.PPU_Read(0x3F00 + (palette << 2) + pixel)
-    
-    
-    def patternTableToString(self, tableIndex):
-        table = self.patternTable[tableIndex]
-        with open("patternTable.txt", "w") as f:
-            for row in table:
-                for pixel in row:
-                    f.write(str(pixel))
-                f.write("\n")
-    
     def mirrorRegisters(self):
         dataToMirror = self.ram.readSpace(UInt16(0x2000), UInt16(0x2007)) # 8 bytes
         for newAddressStart in range(UInt16(0x2008).value, UInt16(0x3FFF).value, Int8(0x8).value):
@@ -207,20 +132,18 @@ class PPU:
             self.ram.writeSpace(UInt16(newAddressStart), selfOffsetAddress, dataToMirror)
     
     def readStatusRegister(self) -> int:
-        self.vblank = 1
-        self.updateStatusRegister()
-        
         value = self.status
         self.writeRegister(0x2002, self.status & 0x7F) # Clear VBLANK
         self.writeToggle = 0
         return value
     
-    def writeRegister(self, register, value, mirrorRegisters: bool = False):
+    def writeRegister(self, register, value, mirrorRegisters: bool = False, fromPPU: bool = True):
         if register == 0x2000:
             self.ctrl = value
         elif register == 0x2001:
             self.mask = value
         elif register == 0x2002:
+            if fromPPU == False: return
             self.status = value
         elif register == 0x2003:
             self.address = value
@@ -242,6 +165,7 @@ class PPU:
             else:
                 self.address = (self.address & 0xFF00) | value
                 self.writeToggle = 0
+            value = self.address
         elif register == 0x2007:
             self.vram[self.address] = value
             self.address += 1
@@ -250,7 +174,7 @@ class PPU:
             raise ValueError # Register not found
         
         # Write to address in the RAM
-        self.ram.writeAddress(UInt16(register), value)
+        self.ram.writeAddress(UInt16(register), value, fromPPU=True)
         if mirrorRegisters: self.mirrorRegisters()
     
     def updateStatusRegister(self):
