@@ -99,6 +99,16 @@ class PPU:
         }
     
     def step(self):
+        if self.scanline == -1 and self.cycle == 1:
+            self.vblank = 0
+            self.updateStatusRegister()
+        
+        if self.scanline == 241 and self.cycle == 1:
+            self.vblank = 1
+            # if control.enableMNI:
+            #   self.nmi = 1
+            self.updateStatusRegister()
+        
         # Some fake noise for now
         self.screen.setPixel(self.cycle - 1, self.scanline, (255,255,255))
         
@@ -115,6 +125,51 @@ class PPU:
         
         return 0
     
+    
+    def getPatternTable(self, tableIndex, paletteIndex):
+        patternTable = []
+        
+        for tileY in range(0, 16):
+            for tileX in range(0, 16):
+                offset = tileY * 256 + tileX * 16
+                
+                for row in range(0, 8):
+                    lsb = self.readVRAM(tableIndex * 0x1000 + offset + row + 0)
+                    msb = self.readVRAM(tableIndex * 0x1000 + offset + row + 8)
+                    
+                    tile = []
+                    
+                    for col in range(7, -1, -1): # 8 -> 0 (we're going from l->r but 0 -> 8 is l<-r)
+                        pixel = (lsb & 0x01) + (msb & 0x01)
+                        lsb >>= 1
+                        msb >>= 1
+                        tile.append(pixel)
+    
+    def getColorFromPalette(self, paletteIndex, pixel):
+        address = 0x3F00 + (paletteIndex << 2) + pixel
+        colorHex = self.readVRAM(address)
+        return self.colors[colorHex]
+          
+    def getPaletteFromIndex(self, paletteIndex, colorTuple=False) -> list:
+        paletteStart = 0x3F00
+        #backgroundColor = self.vram[paletteStart]
+        #allPalettes = self.vram[paletteStart:paletteStart+0x1D]
+        #print(len(allPalettes), allPalettes)
+        
+        palette = []
+        for i in range(4):
+            address = paletteStart + 1 + (paletteIndex*4) + i
+            valueAtAddress = self.vram[address]
+            if colorTuple:
+                palette.append(self.colors[valueAtAddress])
+            else:
+                palette.append(valueAtAddress)
+        return palette
+    
+    
+    
+    
+    
     def mirrorRegisters(self):
         dataToMirror = self.ram.readSpace(UInt16(0x2000), UInt16(0x2007)) # 8 bytes
         for newAddressStart in range(UInt16(0x2008).value, UInt16(0x3FFF).value, Int8(0x8).value):
@@ -122,12 +177,12 @@ class PPU:
             self.ram.writeSpace(UInt16(newAddressStart), selfOffsetAddress, dataToMirror)
     
     def readStatusRegister(self) -> int:
-        self.vblank = 1
+        value = self.status
+        
+        self.vblank = 0
+        self.writeToggle = 0
         self.updateStatusRegister()
         
-        value = self.status
-        self.writeRegister(0x2002, self.status & 0x7F) # Clear VBLANK
-        self.writeToggle = 0
         return value
     
     def readVRAM(self):
@@ -193,22 +248,6 @@ class PPU:
         # Write to address in the RAM
         if fromRAM == False: self.ram.writeAddress(UInt16(register), value)
         if mirrorRegisters: self.mirrorRegisters()
-        
-    def getPaletteFromIndex(self, paletteIndex, colorTuple=False) -> list:
-        paletteStart = 0x3F00
-        #backgroundColor = self.vram[paletteStart]
-        #allPalettes = self.vram[paletteStart:paletteStart+0x1D]
-        #print(len(allPalettes), allPalettes)
-        
-        palette = []
-        for i in range(4):
-            address = paletteStart + 1 + (paletteIndex*4) + i
-            valueAtAddress = self.vram[address]
-            if colorTuple:
-                palette.append(self.colors[valueAtAddress])
-            else:
-                palette.append(valueAtAddress)
-        return palette
     
     def updateStatusRegister(self):
         binary = f"0b{self.vblank}{self.spriteZeroHit}{self.spriteOverflow}00000"
