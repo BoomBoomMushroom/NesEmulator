@@ -9,6 +9,7 @@ class RAM:
         # PPU Status Redirect
         addressVal: int = address.value
         if addressVal == 0x2002: return self.console.ppu.readStatusRegister()
+        if addressVal == 0x2007: return self.console.ppu.readVRAM()
         
         return self.memory[addressVal]
     def writeAddress(self, address: UInt16, byte):

@@ -300,8 +300,8 @@ class Ricoh2A03:
             0xFC: self.IllegalNOP_ThreeByte,
         }
         
-        self.doPrint = True
-        #self.doPrint = False
+        #self.doPrint = True
+        self.doPrint = False
         
         self.nestestWithoutPPU = False
         self.nestestWithoutPPUStopAddress = 0x0800

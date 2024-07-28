@@ -130,6 +130,13 @@ class PPU:
         self.writeToggle = 0
         return value
     
+    def readVRAM(self):
+        data = self.ppuDataBuffer
+        self.ppuDataBuffer = self.vram[self.address]
+        if self.address >= 0x3f00: data = self.ppuDataBuffer
+        self.address += 1
+        return data
+    
     def writeRegister(self, register, value, mirrorRegisters: bool = False, fromRAM: bool = False):
         if register == 0x2000:
             self.ctrl = value
@@ -188,6 +195,8 @@ class PPU:
     def reset(self):
         self.vram = bytearray(0x4000)
         self.oam = bytearray(256)
+        
+        self.ppuDataBuffer = 0
         
         self.vramAddress = 0
         self.tempVramAddress = 0
