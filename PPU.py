@@ -171,7 +171,6 @@ class PPU:
         elif register == 0x2007:
             self.vram[self.address] = value
             self.address += 1
-            self.vramUpdate()
             return
         else:
             raise ValueError # Register not found
@@ -179,25 +178,19 @@ class PPU:
         # Write to address in the RAM
         if fromRAM == False: self.ram.writeAddress(UInt16(register), value)
         if mirrorRegisters: self.mirrorRegisters()
-    
-    def vramUpdate(self):
-        updatedAddress = self.address - 1
-        # Pattern table 1 = 0x0000 -> 0x0FFF (VRAM)
-        # Pattern table 2 = 0x1000 -> 0x1FFF (VRAM)
         
-        # Name Table 1 = 0x2000 -> 0x23FF (VRAM)
-        # Name Table 2 = 0x2400 -> 0x27FF (VRAM)
-        # Name Table 3 = 0x2800 -> 0x2BFF (VRAM)
-        # Name Table 4 = 0x2C00 -> 0x2FFF (VRAM)
-        
-        # Palette Table = 0x3F00 -> 0x3FFF (VRAM)
-        
-        if updatedAddress >= 0x3F00 and updatedAddress <= 0x3FFF:
-            # inside of pattern table 1
-            print(updatedAddress, hex(updatedAddress), self.vram[updatedAddress])
-        
-    def getPaletteFromIndex(self, paletteIndex):
-        pass
+    def getPaletteFromIndex(self, paletteIndex, colorTuple=False) -> list:
+        paletteStart = 0x3F00
+        #backgroundColor = self.vram[paletteStart]
+        palette = []
+        for i in range(4):
+            address = paletteStart + 1 + (paletteIndex*4) + i
+            valueAtAddress = self.vram[address]
+            if colorTuple:
+                palette.append(self.colors[valueAtAddress])
+            else:
+                palette.append(valueAtAddress)
+        return palette
     
     def updateStatusRegister(self):
         binary = f"0b{self.vblank}{self.spriteZeroHit}{self.spriteOverflow}00000"

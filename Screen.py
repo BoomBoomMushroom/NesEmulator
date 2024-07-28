@@ -139,12 +139,17 @@ class Screen():
         self.lastFrame = time.time_ns()
     
     def updatePalettes(self, paletteIndexes: list[int] = [], paletteColors: list[tuple[int,int,int]] = []):
-        for paletteIndex in paletteIndexes:
-            first = paletteIndex*4
-            self.screen.fill((127, 127, 127), self.paletteBoxes[first])
-            self.screen.fill((127, 127, 127), self.paletteBoxes[first+1])
-            self.screen.fill((127, 127, 127), self.paletteBoxes[first+2])
-            self.screen.fill((127, 127, 127), self.paletteBoxes[first+3])
+        while len(paletteColors) < len(paletteIndexes)*4:
+            paletteColors.append((127,127,127))
+        
+        i = 0
+        for index in paletteIndexes:
+            first = index*4
+            self.screen.fill(paletteColors[i], self.paletteBoxes[first])
+            self.screen.fill(paletteColors[i+1], self.paletteBoxes[first+1])
+            self.screen.fill(paletteColors[i+2], self.paletteBoxes[first+2])
+            self.screen.fill(paletteColors[i+3], self.paletteBoxes[first+3])
+            i += 4
     
     def tick(self):
         keys = pygame.key.get_pressed()

@@ -36,6 +36,7 @@ class NES():
     def insertCartridge(self, cartridge: Cartridge):
         self.cartridge = cartridge
         self.cartridge.writePRGToRam(self.ram)
+        self.cartridge.writeCHRToVram(self.ppu.vram)
         
         self.reset()
 
@@ -68,6 +69,12 @@ def askToDumpCPUOutputLog():
         outputLog = console.cpu.outputLog
         print(f"\n{outputLog}\n")
 
+
+def updateScreenPalettes():
+    for i in range(0, 8):
+        colors = console.ppu.getPaletteFromIndex(i, True)
+        screen.updatePalettes([i], colors)
+
 def updateScreen():
     global owedOneFrameOfUpdate
     if owedOneFrameOfUpdate == False:
@@ -82,6 +89,8 @@ def updateScreen():
         f"${console.cpu.XRegister.getHex()}  [{console.cpu.XRegister.getWriteableInt()}]               ",
         f"${console.cpu.YRegister.getHex()}  [{console.cpu.YRegister.getWriteableInt()}]               ",
         f"$00{console.cpu.stackPointer.getHex()}" )
+    updateScreenPalettes()
+    
     if console.ppu.frameComplete: screen.updateScreen(console.screen)
     console.ppu.frameComplete = False
     screen.tick()

@@ -36,6 +36,12 @@ class Cartridge():
         elif self.prgRomChunks == 2:
             RAM.writeSpace(UInt16(0x8000), UInt16(0xFFFF), prgAsBytes)
     
+    def writeCHRToVram(self, VRAM: bytearray):
+        chrAsBytes = bytes(self.CHRMemory)
+        # Pattern Table 0
+        VRAM[0x0000:0x0FFF] = chrAsBytes[0x0000:0x0FFF]
+        # Pattern Table 1
+        VRAM[0x1000:0x1FFF] = chrAsBytes[0x1000:0x1FFF]
     
     def loadFile(self):
         with open(self.filePath, "rb") as f:
