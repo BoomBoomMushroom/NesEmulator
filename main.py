@@ -58,6 +58,9 @@ console = NES()
 #console.loadROM(romDataBinary)
 console.insertCartridge(nestestCartridge)
 
+screen.drawPatternTable(console.ppu.vram[0x0000:0x0FFF], 0)
+#screen.drawPatternTable(console.ppu.vram[0x1000:0x1FFF], 1)
+
 #console.cpu.disassembleInstructions(0xc004, 0xc2BF)
 
 isPaused = True

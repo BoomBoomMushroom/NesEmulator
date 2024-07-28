@@ -151,6 +151,27 @@ class Screen():
             self.screen.fill(paletteColors[i+3], self.paletteBoxes[first+3])
             i += 4
     
+    def drawPatternTable(self, tableData: bytearray, patternTableIndex: int):
+        for i in range(256): # 265 tiles 16x16 8 pixel tiles
+            startAddress = i * 16
+            tile = tableData[startAddress:startAddress+16]
+
+            print(tile, len(tile))
+
+            """
+            lowerPlane = tile[:8]
+            upperPlane = tile[8:]
+            for y in range(8): # Row
+                for x in range(8): # Each pixel in row
+                    lowerBit = (lowerPlane[y] >> (7 - x)) & 1
+                    upperBit = (upperPlane[y] >> (7 - x)) & 1
+                    colorIndex = (upperBit << 1) | lowerBit
+                    print(colorIndex, end="")
+                print("")
+            """
+                    
+        
+    
     def tick(self):
         keys = pygame.key.get_pressed()
         events = pygame.event.get()

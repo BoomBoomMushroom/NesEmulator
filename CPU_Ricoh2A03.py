@@ -303,7 +303,7 @@ class Ricoh2A03:
         self.doPrint = True
         #self.doPrint = False
         
-        self.nestestWithoutPPU = True
+        self.nestestWithoutPPU = False
         self.nestestWithoutPPUStopAddress = 0x0800
         
         self.haltAllExecutionBecauseOfNoInstruction = False
