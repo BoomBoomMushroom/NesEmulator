@@ -12,9 +12,6 @@
 from BitwiseInts import Int8, UInt8, UInt16
 from RAM import RAM
 
-import inspect
-import re
-
 class Ricoh2A03:
     def __init__(self, console) -> None:
         
@@ -252,7 +249,7 @@ class Ricoh2A03:
             0xFC: self.IllegalNOP_ThreeByte,
         }
         
-        self.doPrint = True
+        self.doPrint = False
         self.haltAllExecutionBecauseOfNoInstruction = False
         self.outputLog = ""
     
@@ -346,6 +343,7 @@ class Ricoh2A03:
         self.outputLog += message + "\n"
     
     def logInstruction(self, opcode: str, instructionName: str, operand1: str = "  ", operand2: str = "  ", instructionParameter: str = "    ", isIllegal=False):
+        return
         startRegistersLen = 48
         
         isIllegalChar = "*" if isIllegal else " "
@@ -412,28 +410,6 @@ class Ricoh2A03:
     
     
     # Finish the addressing learning here (https://gemini.google.com/app/562f75670af265e6)
-    
-    def disassembleInstructions(self, startAddress: int = 0, endAddress: int = 0):
-        if type(startAddress) != int: startAddress = startAddress.value
-        if type(endAddress) != int: endAddress = endAddress.value
-        
-        while startAddress < endAddress:
-            address: UInt16 = UInt16(startAddress)
-            opcode = self.readByte(address)
-            try:
-                opcodeHex = opcode.getHex()
-                func = self.opcodes[opcode.getWriteableInt()]
-                
-                src = inspect.getsource(func)
-                hexAdd = src.split("self.pc += ")[1].split("\n")[0].strip()
-                bytesReadOntopOfPC = int(hexAdd,16)
-                
-                startAddress += bytesReadOntopOfPC
-                print(f"${address.getHex()}: ({opcodeHex}) {func.__name__}")
-            except:
-                pass
-            
-            startAddress += 1
     
     def registerStatesString(self) -> str:
         return f"A:{self.accumulatorRegister.getHex()} X:{self.XRegister.getHex()} Y:{self.YRegister.getHex()} P:{self.statusRegister.getHex()} SP:{self.stackPointer.getHex()} PPU: NOT IMPLEMENTED YET"
@@ -3199,5 +3175,5 @@ class Ricoh2A03:
         
         if instruction in self.opcodes: return self.opcodes[instruction]
         else:
-            #print(f"Opcode unknown! byte: {instruction}; hex: {hex(instruction)}; program counter: {self.pc.getHex()}")
+            print(f"Opcode unknown! byte: {instruction}; hex: {hex(instruction)}; program counter: {self.pc.getHex()}")
             return -1

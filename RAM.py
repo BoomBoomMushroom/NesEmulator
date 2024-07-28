@@ -6,24 +6,12 @@ class RAM:
         self.console = console
     
     def readAddress(self, address: UInt16):
-        # PPU Reading
-        addressValue: int = address.value
-        if addressValue == 0x2002: return self.console.ppu.readStatusRegister()
-        
-        if address.value == 0xC28F:
-            print(address)
-        
-        return self.memory[addressValue]
-    def writeAddress(self, address: UInt16, byte, fromPPU: bool=False):
-        # PPU Writing
-        addressValue: int = address.value
-        if addressValue >= 0x2000 and addressValue <= 0x2007:
-            if fromPPU == False:
-                #print(address, byte, hex(byte))
-                self.console.ppu.writeRegister(addressValue, byte, fromPPU=False)
-            return
-        
-        self.memory[addressValue] = byte
+        if address.value == 0x2002: return self.console.ppu.readStatusRegister()
+        return self.memory[address.value]
+    def writeAddress(self, address: UInt16, byte):
+        if address.value >= 0x2000 and address.value <= 0x200F:
+            print(address, byte, hex(byte))
+        self.memory[address.value] = byte
     
 
     def readSpace(self, startAddress: UInt16, endAddress: UInt16):

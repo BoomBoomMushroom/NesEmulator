@@ -26,7 +26,7 @@ class NES():
     def reset(self):
         self.totalCycles = 0
         self.cpu.reset()
-        self.ppu.reset()
+        #self.ppu.reset()
 
     def loadROM(self, romData):
         self.cpu.loadRom(romData)
@@ -56,8 +56,6 @@ screen = Screen()
 console = NES()
 #console.loadROM(romDataBinary)
 console.insertCartridge(nestestCartridge)
-
-#console.cpu.disassembleInstructions(0xC004, 0xC0FF)
 
 isPaused = True
 unpausedForOneTick = False
