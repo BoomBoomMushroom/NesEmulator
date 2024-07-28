@@ -214,10 +214,13 @@ class Ricoh2A03:
             0xB3: self.IllegalIndirectY_LAX,
             0xB7: self.IllegalZeropageY_LAX,
             0xBF: self.IllegalAbsoluteY_LAX,
-            0x83: self.IndirectX_SAX,
-            0x87: self.ZeropageSAX,
-            0x8F: self.AbsoluteSAX,
-            0x97: self.ZeropageY_SAX,
+            0x83: self.IllegalIndirectX_SAX,
+            0x87: self.IllegalZeropageSAX,
+            0x8F: self.IllegalAbsoluteSAX,
+            0x97: self.IllegalZeropageY_SAX,
+            
+            0xC3: self.IllegalIndirectX_DCP,
+            0xC7: self.IllegalZeropage_DCP,
             
             0xEB: self.IllegalSBC,
             0x1A: self.IllegalNOP_OneByte,
@@ -251,7 +254,12 @@ class Ricoh2A03:
             0xFC: self.IllegalNOP_ThreeByte,
         }
         
-        self.doPrint = False
+        self.doPrint = True
+        #self.doPrint = False
+        
+        self.nestestWithoutPPU = True
+        self.nestestWithoutPPUStopAddress = 0x0800
+        
         self.haltAllExecutionBecauseOfNoInstruction = False
         self.outputLog = ""
     
@@ -274,8 +282,13 @@ class Ricoh2A03:
         highByte = self.readByte(UInt16(0xFFFD))
         
         # Set the PC to the address found at the reset vector
-        self.pc = self.combineTwoBytesToOneAddress(highByte, lowByte)
-        #self.pc = UInt16(0xC000)
+        if self.nestestWithoutPPU:
+            self.stackPointer = UInt8(0xFF)
+            self.pushStackPointer(0x08) # 0x0800
+            self.pushStackPointer(0x00)
+            self.pc = UInt16(0xC000)
+        else:
+            self.pc = self.combineTwoBytesToOneAddress(highByte, lowByte)
     
     
     def step(self):
@@ -286,7 +299,12 @@ class Ricoh2A03:
         if self.haltAllExecutionBecauseOfNoInstruction: return -1
         if self.pc == None:
             if self.doPrint: print("Program Counter is null! This usually means the ROM wasn't loaded")
-            return
+            return -1
+        
+        if self.nestestWithoutPPU:
+            if self.pc.getWriteableInt() == self.nestestWithoutPPUStopAddress:
+                print("Nestest is done testing...")
+                return -1
         
         instructionHex: Int8 = self.readInstruction()
         instructionFunction = self.decodeInstruction(instructionHex)
@@ -294,7 +312,7 @@ class Ricoh2A03:
         if instructionFunction == -1:
             if self.doPrint: print("Illegal Opcode")
             self.pc += 0x1
-            #instructionFunction = None
+            instructionFunction = None
             return
         if instructionFunction == None:
             if self.doPrint: print(f"Something went wrong! An instruction doesn't seem to have a function! PC: {self.pc.getHex()}; instruction: {instructionHex}")
@@ -368,16 +386,12 @@ class Ricoh2A03:
                 
                 
                 src = inspect.getsource(func)
-                bytesReadOntopOfPC = 0
+                bytesReadOntopOfPC = src.count("self.pc + 0x")
                 operands = ""
-                
-                if "self.pc += " in src:
-                    hexAdd = src.split("self.pc += ")[1].split("\n")[0].strip()
-                    bytesReadOntopOfPC = int(hexAdd,16)
 
-                    for i in range(bytesReadOntopOfPC+1):
-                        operand = self.readByte(address + i)
-                        operands += f" {operand.getHex()}"
+                for i in range(1, bytesReadOntopOfPC):
+                    operand = self.readByte(address + i)
+                    operands += f" {operand.getHex()}"
 
                 startAddress += bytesReadOntopOfPC
                 print(f"${address.getHex()}: ({opcodeHex}) {func.__name__}{operands}")
@@ -656,7 +670,7 @@ class Ricoh2A03:
         PCH: UInt8 = self.readByte(self.pc + 0x2)
         address: UInt16 = self.combineTwoBytesToOneAddress(PCH, PCL)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "JMP", PCL.getHex(), PCH.getHex(), f"${address.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "JMP", PCL.getHex(), PCH.getHex(), f"${address.getHex()}")
         
         self.pc = address - 0x1 # Remove 1 so that when the PC increments it cancels out
         
@@ -665,7 +679,7 @@ class Ricoh2A03:
     def ImmediateLDX(self) -> int:
         operand: Int8 = self.readByte(self.pc + 0x1)
 
-        #self.logInstruction(self.readByte(self.pc).getHex(), "LDX", operand.getHex(), instructionParameter=f"#${operand.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "LDX", operand.getHex(), instructionParameter=f"#${operand.getHex()}")
 
         self.XRegister = operand
         
@@ -681,7 +695,7 @@ class Ricoh2A03:
         oldValue = self.readByte(operand)
         self.RAM.writeAddress(operand, self.XRegister.getWriteableInt())
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "STX", operand.getHex(), instructionParameter=f"${operand.getHex()} = {oldValue.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "STX", operand.getHex(), instructionParameter=f"${operand.getHex()} = {oldValue.getHex()}")
         
         self.pc += 0x1
         return 3
@@ -696,7 +710,7 @@ class Ricoh2A03:
         lowByteReturnAddr: UInt16 = returnAddressToPush & 0xFF
         highByteReturnAddr: UInt16 = returnAddressToPush >> 8
 
-        #self.logInstruction(self.readByte(self.pc).getHex(), "JSR", PCL.getHex(), PCH.getHex(), instructionParameter=f"${(address+1).getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "JSR", PCL.getHex(), PCH.getHex(), instructionParameter=f"${(address+1).getHex()}")
 
         self.pushStackPointer( UInt8(highByteReturnAddr.value).value ) # High Byte
         self.pushStackPointer( UInt8(lowByteReturnAddr.value).value )  # Low Byte
@@ -705,18 +719,18 @@ class Ricoh2A03:
         return 6
     
     def NOP(self) -> int:
-        #self.logInstruction(self.readByte(self.pc).getHex(), "NOP")
+        self.logInstruction(self.readByte(self.pc).getHex(), "NOP")
         return 2
         
     def SEC(self) -> int:
         self.carryFlag = True
-        #self.logInstruction(self.readByte(self.pc).getHex(), "SEC")
+        self.logInstruction(self.readByte(self.pc).getHex(), "SEC")
         return 2
     
     def BCS(self) -> int:
         operand: Int8 = self.readByte(self.pc + 0x1)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "BCS", operand.getHex(), instructionParameter=f"${(self.pc+operand.value+2).getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "BCS", operand.getHex(), instructionParameter=f"${(self.pc+operand.value+2).getHex()}")
         
         if self.carryFlag == True:
             self.pc += operand.value
@@ -726,14 +740,14 @@ class Ricoh2A03:
     
     def CLC(self):
         self.carryFlag = False
-        #self.logInstruction(self.readByte(self.pc).getHex(), "CLC")
+        self.logInstruction(self.readByte(self.pc).getHex(), "CLC")
         return 2
     
     def BCC(self):
         operand: Int8 = self.readByte(self.pc + 0x1)
         addressIfBranched: UInt16 = self.pc + operand.value
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "BCC", operand.getHex(), instructionParameter=f"${(addressIfBranched+2).getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "BCC", operand.getHex(), instructionParameter=f"${(addressIfBranched+2).getHex()}")
         
         if self.carryFlag == False:
             self.pc = addressIfBranched
@@ -744,7 +758,7 @@ class Ricoh2A03:
     def ImmediateLDA(self):
         operand: Int8 = self.readByte(self.pc + 0x1)
 
-        #self.logInstruction(self.readByte(self.pc).getHex(), "LDA", operand.getHex(), instructionParameter=f"#${operand.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "LDA", operand.getHex(), instructionParameter=f"#${operand.getHex()}")
         
         self.accumulatorRegister = operand
         
@@ -757,7 +771,7 @@ class Ricoh2A03:
     def BEQ(self):
         operand: Int8 = self.readByte(self.pc + 0x1)
         addressIfBranched: UInt16 = self.pc + operand.value
-        #self.logInstruction(self.readByte(self.pc).getHex(), "BEQ", operand.getHex(), instructionParameter=f"${(addressIfBranched+2).getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "BEQ", operand.getHex(), instructionParameter=f"${(addressIfBranched+2).getHex()}")
 
         if self.zeroFlag == True:
             self.pc = addressIfBranched
@@ -769,7 +783,7 @@ class Ricoh2A03:
         operand: Int8 = Int8(self.readByte(self.pc + 0x1).value)
         addressIfBranched: UInt16 = self.pc + operand.value
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "BNE", operand.getHex(), instructionParameter=f"${(addressIfBranched+2).getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "BNE", operand.getHex(), instructionParameter=f"${(addressIfBranched+2).getHex()}")
         if self.zeroFlag == False:
             self.pc = addressIfBranched
         
@@ -783,7 +797,7 @@ class Ricoh2A03:
         
         self.STA(operand)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "STA", operand.getHex(), instructionParameter=f"${operand.getHex()} = {oldValue.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "STA", operand.getHex(), instructionParameter=f"${operand.getHex()} = {oldValue.getHex()}")
         
         self.pc += 0x1
         return 3
@@ -792,7 +806,7 @@ class Ricoh2A03:
         operand: Int8 = self.readByte(self.pc + 0x1)
         valueToTest: UInt8 = self.readByte(UInt16(operand.value))
 
-        #self.logInstruction(self.readByte(self.pc).getHex(), "BIT", operand.getHex(), instructionParameter=f"${operand.getHex()} = {valueToTest.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "BIT", operand.getHex(), instructionParameter=f"${operand.getHex()} = {valueToTest.getHex()}")
         
         andValue, negativeFlag, overflowFlag, zeroFlag = self.BIT(self.accumulatorRegister, valueToTest)
         self.negativeFlag = negativeFlag
@@ -807,7 +821,7 @@ class Ricoh2A03:
         offset: Int8 = self.readByte(self.pc + 0x1)
         newAddressIfBranched: UInt16 = self.pc + offset.value
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "BVS", offset.getHex(), instructionParameter=f"${(newAddressIfBranched+2).getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "BVS", offset.getHex(), instructionParameter=f"${(newAddressIfBranched+2).getHex()}")
         
         if self.overflowFlag == True:
             self.pc = newAddressIfBranched
@@ -819,7 +833,7 @@ class Ricoh2A03:
         offset: Int8 = self.readByte(self.pc + 0x1)
         newAddressIfBranch: UInt16 = self.pc + offset.value
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "BVC", offset.getHex(), instructionParameter=f"${(newAddressIfBranch + 2).getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "BVC", offset.getHex(), instructionParameter=f"${(newAddressIfBranch + 2).getHex()}")
         
         if self.overflowFlag == False:
             self.pc = newAddressIfBranch
@@ -831,7 +845,7 @@ class Ricoh2A03:
         offset: Int8 = Int8(self.readByte(self.pc + 0x1).value)
         newAddressIfBranch: UInt16 = self.pc + offset.value
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "BPL", offset.getHex(), instructionParameter=f"${(newAddressIfBranch + 2).getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "BPL", offset.getHex(), instructionParameter=f"${(newAddressIfBranch + 2).getHex()}")
         
         if self.negativeFlag == False:
             self.pc = newAddressIfBranch
@@ -840,7 +854,7 @@ class Ricoh2A03:
         return 2
     
     def RTS(self):
-        #self.logInstruction(self.readByte(self.pc).getHex(), "RTS")
+        self.logInstruction(self.readByte(self.pc).getHex(), "RTS")
 
         lowByte: UInt8 = UInt8(self.popStackPointer())
         highByte: UInt8 = UInt8(self.popStackPointer())
@@ -851,19 +865,19 @@ class Ricoh2A03:
         return 6
     
     def SEI(self):
-        #self.logInstruction(self.readByte(self.pc).getHex(), "SEI")
+        self.logInstruction(self.readByte(self.pc).getHex(), "SEI")
 
         self.interruptDisableFlag = True
         return 2
     
     def SED(self):
-        #self.logInstruction(self.readByte(self.pc).getHex(), "SED")
+        self.logInstruction(self.readByte(self.pc).getHex(), "SED")
         
         self.decimalModeFlag = True
         return 2
     
     def PHP(self):
-        #self.logInstruction(self.readByte(self.pc).getHex(), "PHP")
+        self.logInstruction(self.readByte(self.pc).getHex(), "PHP")
         
         currentStatus: UInt8 = self.statusRegister
         statusToPush: UInt8 = currentStatus | 0x30
@@ -872,7 +886,7 @@ class Ricoh2A03:
         return 3
     
     def PLA(self):
-        #self.logInstruction(self.readByte(self.pc).getHex(), "PLA")
+        self.logInstruction(self.readByte(self.pc).getHex(), "PLA")
         
         valueOnStack: int = self.popStackPointer()
         self.accumulatorRegister = Int8(valueOnStack)
@@ -886,7 +900,7 @@ class Ricoh2A03:
         operand = self.readByte(self.pc + 0x1)
         value: int = operand.value
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "AND", self.readByte(self.pc+0x1).getHex(), instructionParameter=f"#${self.readByte(self.pc+0x1).getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "AND", self.readByte(self.pc+0x1).getHex(), instructionParameter=f"#${self.readByte(self.pc+0x1).getHex()}")
         
         andResult = self.AND_Values(self.accumulatorRegister, value)
         self.accumulatorRegister = andResult
@@ -907,24 +921,24 @@ class Ricoh2A03:
         self.zeroFlag = zeroFlag
         self.carryFlag = carryFlag
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "CMP", self.readByte(self.pc+0x1).getHex(), instructionParameter=f"#${self.readByte(self.pc+0x1).getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "CMP", self.readByte(self.pc+0x1).getHex(), instructionParameter=f"#${self.readByte(self.pc+0x1).getHex()}")
         
         self.pc += 0x1
         return 2
     
     def CLD(self):
-        #self.logInstruction(self.readByte(self.pc).getHex(), "CLD")
+        self.logInstruction(self.readByte(self.pc).getHex(), "CLD")
         
         self.decimalModeFlag = False
         return 2
     
     def PHA(self):
-        #self.logInstruction(self.readByte(self.pc).getHex(), "PHA")
+        self.logInstruction(self.readByte(self.pc).getHex(), "PHA")
         self.pushStackPointer(self.accumulatorRegister.getWriteableInt())
         return 3
     
     def PLP(self):
-        #self.logInstruction(self.readByte(self.pc).getHex(), "PLP")
+        self.logInstruction(self.readByte(self.pc).getHex(), "PLP")
         
         stackValue: UInt8 = UInt8(self.popStackPointer())
         bits4and5 = (self.statusRegister >> 4) & 3
@@ -942,7 +956,7 @@ class Ricoh2A03:
         offset: Int8 = self.readByte(self.pc + 0x1)
         newAddressIfBranched: UInt16 = self.pc + offset.value
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "BMI", offset.getHex(), instructionParameter=f"${(newAddressIfBranched+2).getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "BMI", offset.getHex(), instructionParameter=f"${(newAddressIfBranched+2).getHex()}")
         
         if self.negativeFlag == True:
             self.pc = newAddressIfBranched
@@ -953,7 +967,7 @@ class Ricoh2A03:
     def ImmediateORA(self):
         operand: UInt8 = self.readByte(self.pc + 0x1)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "ORA", operand.getHex(), instructionParameter=f"#${operand.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "ORA", operand.getHex(), instructionParameter=f"#${operand.getHex()}")
         
         orResult: Int8 = self.ORA(self.accumulatorRegister, operand)
         self.accumulatorRegister = orResult
@@ -965,7 +979,7 @@ class Ricoh2A03:
         return 2
     
     def CLV(self):
-        #self.logInstruction(self.readByte(self.pc).getHex(), "CLV")
+        self.logInstruction(self.readByte(self.pc).getHex(), "CLV")
         
         self.overflowFlag = False
         return 2
@@ -973,7 +987,7 @@ class Ricoh2A03:
     def ImmediateEOR(self):
         operand: UInt8 = self.readByte(self.pc + 0x1)
     
-        #self.logInstruction(self.readByte(self.pc).getHex(), "EOR", operand.getHex(), instructionParameter=f"#${operand.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "EOR", operand.getHex(), instructionParameter=f"#${operand.getHex()}")
     
         eorResult: Int8 = self.EOR(self.accumulatorRegister, operand)
         self.accumulatorRegister = eorResult
@@ -990,7 +1004,7 @@ class Ricoh2A03:
         # I hate this function so much. If i have to deal with this again I will kms
         operand: UInt8 = self.readByte(self.pc + 0x1)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "ADC", operand.getHex(), instructionParameter=f"#${operand.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "ADC", operand.getHex(), instructionParameter=f"#${operand.getHex()}")
         
         resultInt8, carryFlag, negativeFlag, zeroFlag = self.ADC(self.accumulatorRegister, operand, self.carryFlag)
 
@@ -1005,7 +1019,7 @@ class Ricoh2A03:
     
     def ImmediateLDY(self):
         operand: UInt8 = self.readByte(self.pc + 0x1)
-        #self.logInstruction(self.readByte(self.pc).getHex(), "LDY", operand.getHex(), instructionParameter=f"#${operand.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "LDY", operand.getHex(), instructionParameter=f"#${operand.getHex()}")
         
         self.YRegister = Int8(operand.value)
         
@@ -1025,7 +1039,7 @@ class Ricoh2A03:
         self.zeroFlag = zeroFlag
         self.carryFlag = carryFlag
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "CPY", self.readByte(self.pc+0x1).getHex(), instructionParameter=f"#${self.readByte(self.pc+0x1).getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "CPY", self.readByte(self.pc+0x1).getHex(), instructionParameter=f"#${self.readByte(self.pc+0x1).getHex()}")
         
         self.pc += 0x1
         return 2
@@ -1040,7 +1054,7 @@ class Ricoh2A03:
         self.zeroFlag = zeroFlag
         self.carryFlag = carryFlag
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "CPX", self.readByte(self.pc+0x1).getHex(), instructionParameter=f"#${self.readByte(self.pc+0x1).getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "CPX", self.readByte(self.pc+0x1).getHex(), instructionParameter=f"#${self.readByte(self.pc+0x1).getHex()}")
         
         self.pc += 0x1
         return 2
@@ -1048,7 +1062,7 @@ class Ricoh2A03:
     def ImmediateSBC(self, illegal: bool = False):
         operand: UInt8 = self.readByte(self.pc + 0x1)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "SBC", operand.getHex(), instructionParameter=f"#${operand.getHex()}", isIllegal=illegal)
+        self.logInstruction(self.readByte(self.pc).getHex(), "SBC", operand.getHex(), instructionParameter=f"#${operand.getHex()}", isIllegal=illegal)
         
         
         accumulatorRegister, negativeFlag, zeroFlag, overflowFlag, carryFlag = self.SBC(self.accumulatorRegister, operand, self.carryFlag)
@@ -1064,7 +1078,7 @@ class Ricoh2A03:
 
     
     def INY(self):
-        #self.logInstruction(self.readByte(self.pc).getHex(), "INY")
+        self.logInstruction(self.readByte(self.pc).getHex(), "INY")
         self.YRegister += 1
         self.updateNegativeFlag(self.YRegister)
         self.updateZeroFlag(self.YRegister)
@@ -1072,7 +1086,7 @@ class Ricoh2A03:
         return 2
     
     def INX(self):
-        #self.logInstruction(self.readByte(self.pc).getHex(), "INX")
+        self.logInstruction(self.readByte(self.pc).getHex(), "INX")
         self.XRegister += 1
         self.updateNegativeFlag(self.XRegister)
         self.updateZeroFlag(self.XRegister)
@@ -1080,7 +1094,7 @@ class Ricoh2A03:
         return 2
     
     def DEY(self):
-        #self.logInstruction(self.readByte(self.pc).getHex(), "DEY")
+        self.logInstruction(self.readByte(self.pc).getHex(), "DEY")
         self.YRegister -= 1
         self.updateNegativeFlag(self.YRegister)
         self.updateZeroFlag(self.YRegister)
@@ -1088,7 +1102,7 @@ class Ricoh2A03:
         return 2
     
     def DEX(self):
-        #self.logInstruction(self.readByte(self.pc).getHex(), "DEX")
+        self.logInstruction(self.readByte(self.pc).getHex(), "DEX")
         self.XRegister -= 1
         self.updateNegativeFlag(self.XRegister)
         self.updateZeroFlag(self.XRegister)
@@ -1096,35 +1110,35 @@ class Ricoh2A03:
         return 2
     
     def TAY(self):
-        #self.logInstruction(self.readByte(self.pc).getHex(), "TAY")
+        self.logInstruction(self.readByte(self.pc).getHex(), "TAY")
         self.YRegister = self.accumulatorRegister
         self.updateNegativeFlag(self.YRegister)
         self.updateZeroFlag(self.YRegister)
         return 2
     
     def TAX(self):
-        #self.logInstruction(self.readByte(self.pc).getHex(), "TAX")
+        self.logInstruction(self.readByte(self.pc).getHex(), "TAX")
         self.XRegister = self.accumulatorRegister
         self.updateNegativeFlag(self.XRegister)
         self.updateZeroFlag(self.XRegister)
         return 2
     
     def TYA(self):
-        #self.logInstruction(self.readByte(self.pc).getHex(), "TYA")
+        self.logInstruction(self.readByte(self.pc).getHex(), "TYA")
         self.accumulatorRegister = self.YRegister
         self.updateNegativeFlag(self.accumulatorRegister)
         self.updateZeroFlag(self.accumulatorRegister)
         return 2
     
     def TXA(self):
-        #self.logInstruction(self.readByte(self.pc).getHex(), "TXA")
+        self.logInstruction(self.readByte(self.pc).getHex(), "TXA")
         self.accumulatorRegister = self.XRegister
         self.updateNegativeFlag(self.accumulatorRegister)
         self.updateZeroFlag(self.accumulatorRegister)
         return 2
     
     def TSX(self):
-        #self.logInstruction(self.readByte(self.pc).getHex(), "TSX")
+        self.logInstruction(self.readByte(self.pc).getHex(), "TSX")
         self.XRegister = self.stackPointer
         self.updateNegativeFlag(self.XRegister)
         self.updateZeroFlag(self.XRegister)
@@ -1136,7 +1150,7 @@ class Ricoh2A03:
         operand2: UInt8 = self.readByte(self.pc + 0x2)
         fullAddress: UInt16 = self.combineTwoBytesToOneAddress(operand2, operand1)
 
-        #self.logInstruction(self.readByte(self.pc).getHex(), "STX", operand1.getHex(), operand2.getHex(), instructionParameter=f"${fullAddress.getHex()} = {self.readByte(fullAddress).getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "STX", operand1.getHex(), operand2.getHex(), instructionParameter=f"${fullAddress.getHex()} = {self.readByte(fullAddress).getHex()}")
 
         self.RAM.writeAddress(fullAddress, self.XRegister.getWriteableInt())
 
@@ -1144,7 +1158,7 @@ class Ricoh2A03:
         return 4
     
     def TXS(self):
-        #self.logInstruction(self.readByte(self.pc).getHex(), "TXS")
+        self.logInstruction(self.readByte(self.pc).getHex(), "TXS")
         self.stackPointer = self.XRegister
         return 2
     
@@ -1155,7 +1169,7 @@ class Ricoh2A03:
 
         valueFromMemory = self.readByte(fullAddress)
 
-        #self.logInstruction(self.readByte(self.pc).getHex(), "LDX", operand1.getHex(), operand2.getHex(), instructionParameter=f"${fullAddress.getHex()} = {valueFromMemory.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "LDX", operand1.getHex(), operand2.getHex(), instructionParameter=f"${fullAddress.getHex()} = {valueFromMemory.getHex()}")
 
         self.XRegister = valueFromMemory
 
@@ -1171,7 +1185,7 @@ class Ricoh2A03:
         fullAddress: UInt16 = self.combineTwoBytesToOneAddress(operand2, operand1)
         valueFromMemory: UInt8 = self.readByte(fullAddress)
 
-        #self.logInstruction(self.readByte(self.pc).getHex(), "LDA", operand1.getHex(), operand2.getHex(), instructionParameter=f"${fullAddress.getHex()} = {valueFromMemory.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "LDA", operand1.getHex(), operand2.getHex(), instructionParameter=f"${fullAddress.getHex()} = {valueFromMemory.getHex()}")
 
         self.LDA(fullAddress)
         self.updateNegativeFlag(self.accumulatorRegister)
@@ -1181,7 +1195,7 @@ class Ricoh2A03:
         return 4
     
     def RTI(self):
-        #self.logInstruction(self.readByte(self.pc).getHex(), "RTI")
+        self.logInstruction(self.readByte(self.pc).getHex(), "RTI")
         
         oldBreakFlag = self.breakFlag
         statusRegisterPulled: UInt8 = UInt8(self.popStackPointer())
@@ -1197,7 +1211,7 @@ class Ricoh2A03:
         return 6
     
     def AccumulatorLSR(self):
-        #self.logInstruction(self.readByte(self.pc).getHex(), "LSR", instructionParameter="A")
+        self.logInstruction(self.readByte(self.pc).getHex(), "LSR", instructionParameter="A")
         
         result, carryFlag, negativeFlag, zeroFlag = self.LSR(self.accumulatorRegister)
         self.accumulatorRegister = result
@@ -1208,7 +1222,7 @@ class Ricoh2A03:
         return 2
     
     def AccumulatorASL(self):
-        #self.logInstruction(self.readByte(self.pc).getHex(), "ASL", instructionParameter="A")
+        self.logInstruction(self.readByte(self.pc).getHex(), "ASL", instructionParameter="A")
         
         result, carryFlag, negativeFlag, zeroFlag = self.ASL(self.accumulatorRegister)
         
@@ -1220,7 +1234,7 @@ class Ricoh2A03:
         return 2
     
     def AccumulatorROR(self):
-        #self.logInstruction(self.readByte(self.pc).getHex(), "ROR", instructionParameter="A")
+        self.logInstruction(self.readByte(self.pc).getHex(), "ROR", instructionParameter="A")
         
         result, carryFlag, negativeFlag, zeroFlag = self.ROR(self.accumulatorRegister, self.carryFlag)
         
@@ -1233,7 +1247,7 @@ class Ricoh2A03:
         
     
     def AccumulatorROL(self):
-        #self.logInstruction(self.readByte(self.pc).getHex(), "ROL", instructionParameter="A")
+        self.logInstruction(self.readByte(self.pc).getHex(), "ROL", instructionParameter="A")
         
         result, carryFlag, negativeFlag, zeroFlag = self.ROL(self.accumulatorRegister, self.carryFlag)
         self.accumulatorRegister = result
@@ -1247,7 +1261,7 @@ class Ricoh2A03:
         zeropageAddress: UInt8 = self.readByte(self.pc + 0x1)
         oldValue: Int8 = self.readByte(zeropageAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "LDA", zeropageAddress.getHex(), instructionParameter=f"${zeropageAddress.getHex()} = {oldValue.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "LDA", zeropageAddress.getHex(), instructionParameter=f"${zeropageAddress.getHex()} = {oldValue.getHex()}")
         
         self.LDA(zeropageAddress)
         self.updateNegativeFlag(self.accumulatorRegister)
@@ -1262,7 +1276,7 @@ class Ricoh2A03:
         fullAddress: UInt16 = self.combineTwoBytesToOneAddress(operand2, operand1)
         oldValue: Int8 = self.readByte(fullAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "STA", operand1.getHex(), operand2.getHex(), instructionParameter=f"${fullAddress.getHex()} = {oldValue.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "STA", operand1.getHex(), operand2.getHex(), instructionParameter=f"${fullAddress.getHex()} = {oldValue.getHex()}")
         
         self.STA(fullAddress)
         
@@ -1277,7 +1291,7 @@ class Ricoh2A03:
         fullAddress: UInt16 = self.combineTwoBytesToOneAddress(highAddressByte, lowAddressByte)
         memoryBefore: UInt8 = self.readByte(fullAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "LDA", operand.getHex(), instructionParameter=f"(${operand.getHex()},X) @ {(zeropageAddress).getHex()} = {fullAddress.getHex()} = {memoryBefore.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "LDA", operand.getHex(), instructionParameter=f"(${operand.getHex()},X) @ {(zeropageAddress).getHex()} = {fullAddress.getHex()} = {memoryBefore.getHex()}")
         
         self.LDA(fullAddress)
         self.updateNegativeFlag(self.accumulatorRegister)
@@ -1294,7 +1308,7 @@ class Ricoh2A03:
         fullAddress: UInt16 = self.combineTwoBytesToOneAddress(highAddressByte, lowAddressByte)
         memoryBefore: UInt8 = self.readByte(fullAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "STA", operand.getHex(), instructionParameter=f"(${operand.getHex()},X) @ {(zeropageAddress).getHex()} = {fullAddress.getHex()} = {memoryBefore.getHex()}")        
+        self.logInstruction(self.readByte(self.pc).getHex(), "STA", operand.getHex(), instructionParameter=f"(${operand.getHex()},X) @ {(zeropageAddress).getHex()} = {fullAddress.getHex()} = {memoryBefore.getHex()}")        
         
         self.STA(fullAddress)
         
@@ -1309,7 +1323,7 @@ class Ricoh2A03:
         fullAddress: UInt16 = self.combineTwoBytesToOneAddress(highAddressByte, lowAddressByte)
         memoryBefore: UInt8 = self.readByte(fullAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "ORA", operand.getHex(), instructionParameter=f"(${operand.getHex()},X) @ {(zeropageAddress).getHex()} = {fullAddress.getHex()} = {memoryBefore.getHex()}")        
+        self.logInstruction(self.readByte(self.pc).getHex(), "ORA", operand.getHex(), instructionParameter=f"(${operand.getHex()},X) @ {(zeropageAddress).getHex()} = {fullAddress.getHex()} = {memoryBefore.getHex()}")        
         
         
         orResult: Int8 = self.ORA(self.accumulatorRegister, memoryBefore.getWriteableInt())
@@ -1329,7 +1343,7 @@ class Ricoh2A03:
         fullAddress: UInt16 = self.combineTwoBytesToOneAddress(highAddressByte, lowAddressByte)
         memoryBefore: UInt8 = self.readByte(fullAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "AND", operand.getHex(), instructionParameter=f"(${operand.getHex()},X) @ {(zeropageAddress).getHex()} = {fullAddress.getHex()} = {memoryBefore.getHex()}")        
+        self.logInstruction(self.readByte(self.pc).getHex(), "AND", operand.getHex(), instructionParameter=f"(${operand.getHex()},X) @ {(zeropageAddress).getHex()} = {fullAddress.getHex()} = {memoryBefore.getHex()}")        
         
         
         andResult: Int8 = self.AND_Values(self.accumulatorRegister, memoryBefore)
@@ -1349,7 +1363,7 @@ class Ricoh2A03:
         fullAddress: UInt16 = self.combineTwoBytesToOneAddress(highAddressByte, lowAddressByte)
         memoryBefore: UInt8 = self.readByte(fullAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "EOR", operand.getHex(), instructionParameter=f"(${operand.getHex()},X) @ {(zeropageAddress).getHex()} = {fullAddress.getHex()} = {memoryBefore.getHex()}")        
+        self.logInstruction(self.readByte(self.pc).getHex(), "EOR", operand.getHex(), instructionParameter=f"(${operand.getHex()},X) @ {(zeropageAddress).getHex()} = {fullAddress.getHex()} = {memoryBefore.getHex()}")        
         
         eorResult: Int8 = self.EOR(self.accumulatorRegister, memoryBefore)
         self.accumulatorRegister = eorResult
@@ -1368,7 +1382,7 @@ class Ricoh2A03:
         fullAddress: UInt16 = self.combineTwoBytesToOneAddress(highAddressByte, lowAddressByte)
         memoryBefore: UInt8 = self.readByte(fullAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "ADC", operand.getHex(), instructionParameter=f"(${operand.getHex()},X) @ {(zeropageAddress).getHex()} = {fullAddress.getHex()} = {memoryBefore.getHex()}")        
+        self.logInstruction(self.readByte(self.pc).getHex(), "ADC", operand.getHex(), instructionParameter=f"(${operand.getHex()},X) @ {(zeropageAddress).getHex()} = {fullAddress.getHex()} = {memoryBefore.getHex()}")        
         
         resultInt8, carryFlag, negativeFlag, zeroFlag = self.ADC(self.accumulatorRegister, memoryBefore, self.carryFlag)
 
@@ -1389,7 +1403,7 @@ class Ricoh2A03:
         fullAddress: UInt16 = self.combineTwoBytesToOneAddress(highAddressByte, lowAddressByte)
         memoryBefore: UInt8 = self.readByte(fullAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "CMP", operand.getHex(), instructionParameter=f"(${operand.getHex()},X) @ {(zeropageAddress).getHex()} = {fullAddress.getHex()} = {memoryBefore.getHex()}")        
+        self.logInstruction(self.readByte(self.pc).getHex(), "CMP", operand.getHex(), instructionParameter=f"(${operand.getHex()},X) @ {(zeropageAddress).getHex()} = {fullAddress.getHex()} = {memoryBefore.getHex()}")        
         
         compareResult, negativeFlag, zeroFlag, carryFlag = self.compareValues(self.accumulatorRegister, memoryBefore)
         
@@ -1404,7 +1418,7 @@ class Ricoh2A03:
         operand: UInt8 = self.readByte(self.pc + 0x1)
         valueToReplace: UInt8 = self.readByte(operand)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "STY", operand.getHex(), instructionParameter=f"${operand.getHex()} = {valueToReplace.getHex()}")        
+        self.logInstruction(self.readByte(self.pc).getHex(), "STY", operand.getHex(), instructionParameter=f"${operand.getHex()} = {valueToReplace.getHex()}")        
         
         self.RAM.writeAddress(operand, self.YRegister.getWriteableInt())
         
@@ -1419,7 +1433,7 @@ class Ricoh2A03:
         fullAddress: UInt16 = self.combineTwoBytesToOneAddress(highAddressByte, lowAddressByte)
         memoryBefore: UInt8 = self.readByte(fullAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "SBC", operand.getHex(), instructionParameter=f"(${operand.getHex()},X) @ {(zeropageAddress).getHex()} = {fullAddress.getHex()} = {memoryBefore.getHex()}")        
+        self.logInstruction(self.readByte(self.pc).getHex(), "SBC", operand.getHex(), instructionParameter=f"(${operand.getHex()},X) @ {(zeropageAddress).getHex()} = {fullAddress.getHex()} = {memoryBefore.getHex()}")        
         
         accumulatorRegister, negativeFlag, zeroFlag, overflowFlag, carryFlag = self.SBC(self.accumulatorRegister, memoryBefore, self.carryFlag)
         
@@ -1435,7 +1449,7 @@ class Ricoh2A03:
     def ZeropageLDY(self):
         operand: UInt8 = self.readByte(self.pc + 0x1)
         value: UInt8 = self.readByte(operand)
-        #self.logInstruction(self.readByte(self.pc).getHex(), "LDY", operand.getHex(), instructionParameter=f"${operand.getHex()} = {value.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "LDY", operand.getHex(), instructionParameter=f"${operand.getHex()} = {value.getHex()}")
         
         self.YRegister = value
         self.updateNegativeFlag(self.YRegister)
@@ -1447,7 +1461,7 @@ class Ricoh2A03:
     def ZeropageLDX(self):
         operand: UInt8 = self.readByte(self.pc + 0x1)
         value: UInt8 = self.readByte(operand)
-        #self.logInstruction(self.readByte(self.pc).getHex(), "LDX", operand.getHex(), instructionParameter=f"${operand.getHex()} = {value.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "LDX", operand.getHex(), instructionParameter=f"${operand.getHex()} = {value.getHex()}")
         
         self.XRegister = value
         self.updateNegativeFlag(self.XRegister)
@@ -1460,7 +1474,7 @@ class Ricoh2A03:
         operand: UInt8 = self.readByte(self.pc + 0x1)
         operandValue: UInt8 = self.readByte(operand)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "ORA", operand.getHex(), instructionParameter=f"${operand.getHex()} = {operandValue.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "ORA", operand.getHex(), instructionParameter=f"${operand.getHex()} = {operandValue.getHex()}")
         
         orResult: Int8 = self.ORA(self.accumulatorRegister, operandValue)
         self.accumulatorRegister = orResult
@@ -1475,7 +1489,7 @@ class Ricoh2A03:
         operand: UInt8 = self.readByte(self.pc + 0x1)
         value: UInt8 = self.readByte(operand)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "AND", operand.getHex(), instructionParameter=f"${operand.getHex()} = {value.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "AND", operand.getHex(), instructionParameter=f"${operand.getHex()} = {value.getHex()}")
         
         andResult = self.AND_Values(self.accumulatorRegister, value)
         self.accumulatorRegister = andResult
@@ -1490,7 +1504,7 @@ class Ricoh2A03:
         operand: UInt8 = self.readByte(self.pc + 0x1)
         value: UInt8 = self.readByte(operand)
     
-        #self.logInstruction(self.readByte(self.pc).getHex(), "EOR", operand.getHex(), instructionParameter=f"${operand.getHex()} = {value.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "EOR", operand.getHex(), instructionParameter=f"${operand.getHex()} = {value.getHex()}")
     
         eorResult: Int8 = self.EOR(self.accumulatorRegister, value)
         self.accumulatorRegister = eorResult
@@ -1505,7 +1519,7 @@ class Ricoh2A03:
         operand: UInt8 = self.readByte(self.pc + 0x1)
         value: UInt8 = self.readByte(operand)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "ADC", operand.getHex(), instructionParameter=f"${operand.getHex()} = {value.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "ADC", operand.getHex(), instructionParameter=f"${operand.getHex()} = {value.getHex()}")
         
         resultInt8, carryFlag, negativeFlag, zeroFlag = self.ADC(self.accumulatorRegister, value, self.carryFlag)
 
@@ -1528,7 +1542,7 @@ class Ricoh2A03:
         self.zeroFlag = zeroFlag
         self.carryFlag = carryFlag
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "CMP", self.readByte(self.pc+0x1).getHex(), instructionParameter=f"${operand.getHex()} = {valueToCompare.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "CMP", self.readByte(self.pc+0x1).getHex(), instructionParameter=f"${operand.getHex()} = {valueToCompare.getHex()}")
         
         self.pc += 0x1
         return 3
@@ -1537,7 +1551,7 @@ class Ricoh2A03:
         operand: UInt8 = self.readByte(self.pc + 0x1)
         value: UInt8 = self.readByte(operand)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "SBC", operand.getHex(), instructionParameter=f"${operand.getHex()} = {value.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "SBC", operand.getHex(), instructionParameter=f"${operand.getHex()} = {value.getHex()}")
         
         accumulatorRegister, negativeFlag, zeroFlag, overflowFlag, carryFlag = self.SBC(self.accumulatorRegister, value, self.carryFlag)
         
@@ -1560,7 +1574,7 @@ class Ricoh2A03:
         self.zeroFlag = zeroFlag
         self.carryFlag = carryFlag
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "CPX", operand.getHex(), instructionParameter=f"${operand.getHex()} = {valueToCompare.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "CPX", operand.getHex(), instructionParameter=f"${operand.getHex()} = {valueToCompare.getHex()}")
         
         self.pc += 0x1
         return 3
@@ -1575,7 +1589,7 @@ class Ricoh2A03:
         self.zeroFlag = zeroFlag
         self.carryFlag = carryFlag
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "CPY", operand.getHex(), instructionParameter=f"${operand.getHex()} = {valueToCompare.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "CPY", operand.getHex(), instructionParameter=f"${operand.getHex()} = {valueToCompare.getHex()}")
         
         self.pc += 0x1
         return 3
@@ -1584,7 +1598,7 @@ class Ricoh2A03:
         operand: UInt8 = self.readByte(self.pc + 0x1)
         valueToShift: UInt8 = self.readByte(operand)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "LSR", operand1=operand.getHex(), instructionParameter=f"${operand.getHex()} = {valueToShift.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "LSR", operand1=operand.getHex(), instructionParameter=f"${operand.getHex()} = {valueToShift.getHex()}")
         
         result, carryFlag, negativeFlag, zeroFlag = self.LSR(valueToShift)
         self.RAM.writeAddress(operand, result.getWriteableInt())
@@ -1599,7 +1613,7 @@ class Ricoh2A03:
         operand: UInt8 = self.readByte(self.pc + 0x1)
         valueToShift: UInt8 = self.readByte(operand)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "ASL", operand1=operand.getHex(), instructionParameter=f"${operand.getHex()} = {valueToShift.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "ASL", operand1=operand.getHex(), instructionParameter=f"${operand.getHex()} = {valueToShift.getHex()}")
         
         result, carryFlag, negativeFlag, zeroFlag = self.ASL(valueToShift)
         
@@ -1615,7 +1629,7 @@ class Ricoh2A03:
         operand: UInt8 = self.readByte(self.pc + 0x1)
         valueToShift: UInt8 = self.readByte(operand)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "ROR", operand1=operand.getHex(), instructionParameter=f"${operand.getHex()} = {valueToShift.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "ROR", operand1=operand.getHex(), instructionParameter=f"${operand.getHex()} = {valueToShift.getHex()}")
         
         result, carryFlag, negativeFlag, zeroFlag = self.ROR(valueToShift, self.carryFlag)
         
@@ -1630,7 +1644,7 @@ class Ricoh2A03:
     def ZeropageROL(self):
         operand: UInt8 = self.readByte(self.pc + 0x1)
         valueToShift: UInt8 = self.readByte(operand)
-        #self.logInstruction(self.readByte(self.pc).getHex(), "ROL", operand1=operand.getHex(), instructionParameter=f"${operand.getHex()} = {valueToShift.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "ROL", operand1=operand.getHex(), instructionParameter=f"${operand.getHex()} = {valueToShift.getHex()}")
         
         result, carryFlag, negativeFlag, zeroFlag = self.ROL(valueToShift, self.carryFlag)
         self.RAM.writeAddress(operand, result.getWriteableInt())
@@ -1644,7 +1658,7 @@ class Ricoh2A03:
     def ZeropageINC(self):
         operand: UInt8 = self.readByte(self.pc + 0x1)
         valueToIncrement: UInt8 = self.readByte(operand)
-        #self.logInstruction(self.readByte(self.pc).getHex(), "INC", operand1=operand.getHex(), instructionParameter=f"${operand.getHex()} = {valueToIncrement.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "INC", operand1=operand.getHex(), instructionParameter=f"${operand.getHex()} = {valueToIncrement.getHex()}")
         
         newValue = valueToIncrement + 1
         self.RAM.writeAddress(operand, newValue.getWriteableInt())
@@ -1658,7 +1672,7 @@ class Ricoh2A03:
     def ZeropageDEC(self):
         operand: UInt8 = self.readByte(self.pc + 0x1)
         valueToIncrement: UInt8 = self.readByte(operand)
-        #self.logInstruction(self.readByte(self.pc).getHex(), "DEC", operand1=operand.getHex(), instructionParameter=f"${operand.getHex()} = {valueToIncrement.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "DEC", operand1=operand.getHex(), instructionParameter=f"${operand.getHex()} = {valueToIncrement.getHex()}")
         
         newValue = valueToIncrement - 1
         self.RAM.writeAddress(operand, newValue.getWriteableInt())
@@ -1674,7 +1688,7 @@ class Ricoh2A03:
         PCH: UInt8 = self.readByte(self.pc + 0x2)
         address: UInt16 = self.combineTwoBytesToOneAddress(PCH, PCL)
         valueAtAddress = self.readByte(address)
-        #self.logInstruction(self.readByte(self.pc).getHex(), "LDY", PCL.getHex(), PCH.getHex(), f"${address.getHex()} = {valueAtAddress.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "LDY", PCL.getHex(), PCH.getHex(), f"${address.getHex()} = {valueAtAddress.getHex()}")
         
         self.YRegister = valueAtAddress
         self.updateNegativeFlag(self.YRegister)
@@ -1688,7 +1702,7 @@ class Ricoh2A03:
         PCH: UInt8 = self.readByte(self.pc + 0x2)
         address: UInt16 = self.combineTwoBytesToOneAddress(PCH, PCL)
         valueAtAddress = self.readByte(address)
-        #self.logInstruction(self.readByte(self.pc).getHex(), "STY", PCL.getHex(), PCH.getHex(), f"${address.getHex()} = {valueAtAddress.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "STY", PCL.getHex(), PCH.getHex(), f"${address.getHex()} = {valueAtAddress.getHex()}")
         
         self.RAM.writeAddress(address, self.YRegister.getWriteableInt())
         
@@ -1701,7 +1715,7 @@ class Ricoh2A03:
         address: UInt16 = self.combineTwoBytesToOneAddress(PCH, PCL)
         valueToTest: UInt8 = self.readByte(address)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "BIT", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToTest.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "BIT", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToTest.getHex()}")
         
         andValue, negativeFlag, overflowFlag, zeroFlag = self.BIT(self.accumulatorRegister, valueToTest)
         self.negativeFlag = negativeFlag
@@ -1717,7 +1731,7 @@ class Ricoh2A03:
         address: UInt16 = self.combineTwoBytesToOneAddress(PCH, PCL)
         valueToTest: UInt8 = self.readByte(address)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "ORA", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToTest.getHex()}")        
+        self.logInstruction(self.readByte(self.pc).getHex(), "ORA", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToTest.getHex()}")        
         
         orResult: Int8 = self.ORA(self.accumulatorRegister, valueToTest)
         self.accumulatorRegister = orResult
@@ -1735,7 +1749,7 @@ class Ricoh2A03:
         valueToTest: UInt8 = self.readByte(address)
         value: int = valueToTest.value
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "AND", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToTest.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "AND", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToTest.getHex()}")
         
         andResult = self.AND_Values(self.accumulatorRegister, value)
         self.accumulatorRegister = andResult
@@ -1752,7 +1766,7 @@ class Ricoh2A03:
         address: UInt16 = self.combineTwoBytesToOneAddress(PCH, PCL)
         valueToTest: UInt8 = self.readByte(address)
     
-        #self.logInstruction(self.readByte(self.pc).getHex(), "EOR", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToTest.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "EOR", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToTest.getHex()}")
     
         eorResult: Int8 = self.EOR(self.accumulatorRegister, valueToTest)
         self.accumulatorRegister = eorResult
@@ -1769,7 +1783,7 @@ class Ricoh2A03:
         address: UInt16 = self.combineTwoBytesToOneAddress(PCH, PCL)
         valueToTest: UInt8 = self.readByte(address)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "ADC", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToTest.getHex()}")        
+        self.logInstruction(self.readByte(self.pc).getHex(), "ADC", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToTest.getHex()}")        
         
         resultInt8, carryFlag, negativeFlag, zeroFlag = self.ADC(self.accumulatorRegister, valueToTest, self.carryFlag)
 
@@ -1794,7 +1808,7 @@ class Ricoh2A03:
         self.zeroFlag = zeroFlag
         self.carryFlag = carryFlag
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "CMP", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToCompare.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "CMP", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToCompare.getHex()}")
         
         self.pc += 0x2
         return 4
@@ -1805,7 +1819,7 @@ class Ricoh2A03:
         address: UInt16 = self.combineTwoBytesToOneAddress(PCH, PCL)
         value: UInt8 = self.readByte(address)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "SBC", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {value.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "SBC", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {value.getHex()}")
         
         accumulatorRegister, negativeFlag, zeroFlag, overflowFlag, carryFlag = self.SBC(self.accumulatorRegister, value, self.carryFlag)
         
@@ -1830,7 +1844,7 @@ class Ricoh2A03:
         self.zeroFlag = zeroFlag
         self.carryFlag = carryFlag
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "CPX", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToCompare.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "CPX", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToCompare.getHex()}")
         
         self.pc += 0x2
         return 4
@@ -1847,7 +1861,7 @@ class Ricoh2A03:
         self.zeroFlag = zeroFlag
         self.carryFlag = carryFlag
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "CPY", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToCompare.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "CPY", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToCompare.getHex()}")
         
         self.pc += 0x2
         return 4
@@ -1858,7 +1872,7 @@ class Ricoh2A03:
         address: UInt16 = self.combineTwoBytesToOneAddress(PCH, PCL)
         valueToShift: UInt8 = self.readByte(address)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "LSR", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToShift.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "LSR", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToShift.getHex()}")
         
         result, carryFlag, negativeFlag, zeroFlag = self.LSR(valueToShift)
         self.RAM.writeAddress(address, result.getWriteableInt())
@@ -1875,7 +1889,7 @@ class Ricoh2A03:
         address: UInt16 = self.combineTwoBytesToOneAddress(PCH, PCL)
         valueToShift: UInt8 = self.readByte(address)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "ASL", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToShift.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "ASL", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToShift.getHex()}")
         
         result, carryFlag, negativeFlag, zeroFlag = self.ASL(valueToShift)
         
@@ -1893,7 +1907,7 @@ class Ricoh2A03:
         address: UInt16 = self.combineTwoBytesToOneAddress(PCH, PCL)
         valueToShift: UInt8 = self.readByte(address)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "ROR", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToShift.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "ROR", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToShift.getHex()}")
         
         result, carryFlag, negativeFlag, zeroFlag = self.ROR(valueToShift, self.carryFlag)
         
@@ -1910,7 +1924,7 @@ class Ricoh2A03:
         PCH: UInt8 = self.readByte(self.pc + 0x2)
         address: UInt16 = self.combineTwoBytesToOneAddress(PCH, PCL)
         valueToShift: UInt8 = self.readByte(address)
-        #self.logInstruction(self.readByte(self.pc).getHex(), "ROL", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToShift.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "ROL", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToShift.getHex()}")
         
         result, carryFlag, negativeFlag, zeroFlag = self.ROL(valueToShift, self.carryFlag)
         self.RAM.writeAddress(address, result.getWriteableInt())
@@ -1926,7 +1940,7 @@ class Ricoh2A03:
         PCH: UInt8 = self.readByte(self.pc + 0x2)
         address: UInt16 = self.combineTwoBytesToOneAddress(PCH, PCL)
         valueToIncrement: UInt8 = self.readByte(address)
-        #self.logInstruction(self.readByte(self.pc).getHex(), "INC", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToIncrement.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "INC", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToIncrement.getHex()}")
         
         newValue = valueToIncrement + 1
         self.RAM.writeAddress(address, newValue.getWriteableInt())
@@ -1942,7 +1956,7 @@ class Ricoh2A03:
         PCH: UInt8 = self.readByte(self.pc + 0x2)
         address: UInt16 = self.combineTwoBytesToOneAddress(PCH, PCL)
         valueToIncrement: UInt8 = self.readByte(address)
-        #self.logInstruction(self.readByte(self.pc).getHex(), "DEC", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToIncrement.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "DEC", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToIncrement.getHex()}")
         
         newValue = valueToIncrement - 1
         self.RAM.writeAddress(address, newValue.getWriteableInt())
@@ -1961,7 +1975,7 @@ class Ricoh2A03:
         newAddress: UInt8 = baseAddress + self.YRegister.getWriteableInt()
         memoryBefore: UInt8 = self.readByte(newAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "LDA", operand.getHex(), instructionParameter=f"(${operand.getHex()}),Y = {baseAddress.getHex()} @ {newAddress.getHex()} = {memoryBefore.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "LDA", operand.getHex(), instructionParameter=f"(${operand.getHex()}),Y = {baseAddress.getHex()} @ {newAddress.getHex()} = {memoryBefore.getHex()}")
         
         self.LDA(newAddress)
         self.updateNegativeFlag(self.accumulatorRegister)
@@ -1978,7 +1992,7 @@ class Ricoh2A03:
         newAddress: UInt8 = baseAddress + self.YRegister.getWriteableInt()
         valueToTest: UInt8 = self.readByte(newAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "ORA", operand.getHex(), instructionParameter=f"(${operand.getHex()}),Y = {baseAddress.getHex()} @ {newAddress.getHex()} = {valueToTest.getHex()}")        
+        self.logInstruction(self.readByte(self.pc).getHex(), "ORA", operand.getHex(), instructionParameter=f"(${operand.getHex()}),Y = {baseAddress.getHex()} @ {newAddress.getHex()} = {valueToTest.getHex()}")        
         
         orResult: Int8 = self.ORA(self.accumulatorRegister, valueToTest)
         self.accumulatorRegister = orResult
@@ -1997,7 +2011,7 @@ class Ricoh2A03:
         newAddress: UInt8 = baseAddress + self.YRegister.getWriteableInt()
         valueToTest: UInt8 = self.readByte(newAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "AND", operand.getHex(), instructionParameter=f"(${operand.getHex()}),Y = {baseAddress.getHex()} @ {newAddress.getHex()} = {valueToTest.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "AND", operand.getHex(), instructionParameter=f"(${operand.getHex()}),Y = {baseAddress.getHex()} @ {newAddress.getHex()} = {valueToTest.getHex()}")
         
         andResult = self.AND_Values(self.accumulatorRegister, valueToTest)
         self.accumulatorRegister = andResult
@@ -2016,7 +2030,7 @@ class Ricoh2A03:
         newAddress: UInt8 = baseAddress + self.YRegister.getWriteableInt()
         valueToTest: UInt8 = self.readByte(newAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "EOR", operand.getHex(), instructionParameter=f"(${operand.getHex()}),Y = {baseAddress.getHex()} @ {newAddress.getHex()} = {valueToTest.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "EOR", operand.getHex(), instructionParameter=f"(${operand.getHex()}),Y = {baseAddress.getHex()} @ {newAddress.getHex()} = {valueToTest.getHex()}")
         
         andResult = self.EOR(self.accumulatorRegister, valueToTest)
         self.accumulatorRegister = andResult
@@ -2035,7 +2049,7 @@ class Ricoh2A03:
         newAddress: UInt8 = baseAddress + self.YRegister.getWriteableInt()
         valueToTest: UInt8 = self.readByte(newAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "ADC", operand.getHex(), instructionParameter=f"(${operand.getHex()}),Y = {baseAddress.getHex()} @ {newAddress.getHex()} = {valueToTest.getHex()}")        
+        self.logInstruction(self.readByte(self.pc).getHex(), "ADC", operand.getHex(), instructionParameter=f"(${operand.getHex()}),Y = {baseAddress.getHex()} @ {newAddress.getHex()} = {valueToTest.getHex()}")        
         
         resultInt8, carryFlag, negativeFlag, zeroFlag = self.ADC(self.accumulatorRegister, valueToTest, self.carryFlag)
 
@@ -2056,7 +2070,7 @@ class Ricoh2A03:
         newAddress: UInt8 = baseAddress + self.YRegister.getWriteableInt()
         valueToTest: UInt8 = self.readByte(newAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "CMP", operand.getHex(), instructionParameter=f"(${operand.getHex()}),Y = {baseAddress.getHex()} @ {newAddress.getHex()} = {valueToTest.getHex()}")        
+        self.logInstruction(self.readByte(self.pc).getHex(), "CMP", operand.getHex(), instructionParameter=f"(${operand.getHex()}),Y = {baseAddress.getHex()} @ {newAddress.getHex()} = {valueToTest.getHex()}")        
         
         compareResult, negativeFlag, zeroFlag, carryFlag = self.compareValues(self.accumulatorRegister, valueToTest)
         
@@ -2075,7 +2089,7 @@ class Ricoh2A03:
         newAddress: UInt8 = baseAddress + self.YRegister.getWriteableInt()
         valueToTest: UInt8 = self.readByte(newAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "SBC", operand.getHex(), instructionParameter=f"(${operand.getHex()}),Y = {baseAddress.getHex()} @ {newAddress.getHex()} = {valueToTest.getHex()}")        
+        self.logInstruction(self.readByte(self.pc).getHex(), "SBC", operand.getHex(), instructionParameter=f"(${operand.getHex()}),Y = {baseAddress.getHex()} @ {newAddress.getHex()} = {valueToTest.getHex()}")        
         
         accumulatorRegister, negativeFlag, zeroFlag, overflowFlag, carryFlag = self.SBC(self.accumulatorRegister, valueToTest, self.carryFlag)
         
@@ -2096,7 +2110,7 @@ class Ricoh2A03:
         newAddress: UInt8 = baseAddress + self.YRegister.getWriteableInt()
         valueToTest: UInt8 = self.readByte(newAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "STA", operand.getHex(), instructionParameter=f"(${operand.getHex()}),Y = {baseAddress.getHex()} @ {newAddress.getHex()} = {valueToTest.getHex()}")        
+        self.logInstruction(self.readByte(self.pc).getHex(), "STA", operand.getHex(), instructionParameter=f"(${operand.getHex()}),Y = {baseAddress.getHex()} @ {newAddress.getHex()} = {valueToTest.getHex()}")        
         
         self.STA(newAddress)
         
@@ -2115,7 +2129,7 @@ class Ricoh2A03:
         
         jumpAddress: UInt16 = self.combineTwoBytesToOneAddress(jumpHigh, jumpLow)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "JMP", PCL.getHex(), PCH.getHex(), f"(${addressWhereStored.getHex()}) = {jumpAddress.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "JMP", PCL.getHex(), PCH.getHex(), f"(${addressWhereStored.getHex()}) = {jumpAddress.getHex()}")
         
         self.pc = jumpAddress - 0x1 # Remove 1 so that when the PC increments it cancels out
         
@@ -2128,7 +2142,7 @@ class Ricoh2A03:
         effectiveAddress: UInt16 = fullAddress + self.YRegister.getWriteableInt()
         valueFromMemory: UInt8 = self.readByte(effectiveAddress)
 
-        #self.logInstruction(self.readByte(self.pc).getHex(), "LDA", operand1.getHex(), operand2.getHex(), instructionParameter=f"${fullAddress.getHex()},Y @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "LDA", operand1.getHex(), operand2.getHex(), instructionParameter=f"${fullAddress.getHex()},Y @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")
 
         self.accumulatorRegister = valueFromMemory
 
@@ -2145,7 +2159,7 @@ class Ricoh2A03:
         effectiveAddress: UInt16 = fullAddress + self.YRegister.getWriteableInt()
         valueFromMemory: UInt8 = self.readByte(effectiveAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "ORA", operand1.getHex(), operand2=operand2.getHex(), instructionParameter=f"${fullAddress.getHex()},Y @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")        
+        self.logInstruction(self.readByte(self.pc).getHex(), "ORA", operand1.getHex(), operand2=operand2.getHex(), instructionParameter=f"${fullAddress.getHex()},Y @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")        
         
         orResult: Int8 = self.ORA(self.accumulatorRegister, valueFromMemory)
         self.accumulatorRegister = orResult
@@ -2163,7 +2177,7 @@ class Ricoh2A03:
         effectiveAddress: UInt16 = fullAddress + self.YRegister.getWriteableInt()
         valueFromMemory: UInt8 = self.readByte(effectiveAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "AND", operand1.getHex(), operand2.getHex(), instructionParameter=f"${fullAddress.getHex()},Y @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "AND", operand1.getHex(), operand2.getHex(), instructionParameter=f"${fullAddress.getHex()},Y @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")
         
         andResult = self.AND_Values(self.accumulatorRegister, valueFromMemory)
         self.accumulatorRegister = andResult
@@ -2181,7 +2195,7 @@ class Ricoh2A03:
         effectiveAddress: UInt16 = fullAddress + self.YRegister.getWriteableInt()
         valueFromMemory: UInt8 = self.readByte(effectiveAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "EOR", operand1.getHex(), operand2.getHex(), instructionParameter=f"${fullAddress.getHex()},Y @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "EOR", operand1.getHex(), operand2.getHex(), instructionParameter=f"${fullAddress.getHex()},Y @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")
         
         andResult = self.EOR(self.accumulatorRegister, valueFromMemory)
         self.accumulatorRegister = andResult
@@ -2199,7 +2213,7 @@ class Ricoh2A03:
         effectiveAddress: UInt16 = fullAddress + self.YRegister.getWriteableInt()
         valueFromMemory: UInt8 = self.readByte(effectiveAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "ADC", operand1.getHex(), operand2.getHex(), instructionParameter=f"${fullAddress.getHex()},Y @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")        
+        self.logInstruction(self.readByte(self.pc).getHex(), "ADC", operand1.getHex(), operand2.getHex(), instructionParameter=f"${fullAddress.getHex()},Y @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")        
         
         resultInt8, carryFlag, negativeFlag, zeroFlag = self.ADC(self.accumulatorRegister, valueFromMemory, self.carryFlag)
 
@@ -2219,7 +2233,7 @@ class Ricoh2A03:
         effectiveAddress: UInt16 = fullAddress + self.YRegister.getWriteableInt()
         valueFromMemory: UInt8 = self.readByte(effectiveAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "CMP", operand1.getHex(), operand2.getHex(), instructionParameter=f"${fullAddress.getHex()},Y @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")        
+        self.logInstruction(self.readByte(self.pc).getHex(), "CMP", operand1.getHex(), operand2.getHex(), instructionParameter=f"${fullAddress.getHex()},Y @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")        
         
         compareResult, negativeFlag, zeroFlag, carryFlag = self.compareValues(self.accumulatorRegister, valueFromMemory)
         
@@ -2237,7 +2251,7 @@ class Ricoh2A03:
         effectiveAddress: UInt16 = fullAddress + self.YRegister.getWriteableInt()
         valueFromMemory: UInt8 = self.readByte(effectiveAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "SBC", operand1.getHex(), operand2.getHex(), instructionParameter=f"${fullAddress.getHex()},Y @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")        
+        self.logInstruction(self.readByte(self.pc).getHex(), "SBC", operand1.getHex(), operand2.getHex(), instructionParameter=f"${fullAddress.getHex()},Y @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")        
         
         accumulatorRegister, negativeFlag, zeroFlag, overflowFlag, carryFlag = self.SBC(self.accumulatorRegister, valueFromMemory, self.carryFlag)
         
@@ -2257,7 +2271,7 @@ class Ricoh2A03:
         effectiveAddress: UInt16 = fullAddress + self.YRegister.getWriteableInt()
         valueFromMemory: UInt8 = self.readByte(effectiveAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "STA", operand1.getHex(), operand2.getHex(), instructionParameter=f"${fullAddress.getHex()},Y @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")        
+        self.logInstruction(self.readByte(self.pc).getHex(), "STA", operand1.getHex(), operand2.getHex(), instructionParameter=f"${fullAddress.getHex()},Y @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")        
         
         self.STA(effectiveAddress)
         
@@ -2268,7 +2282,7 @@ class Ricoh2A03:
         operand: UInt8 = self.readByte(self.pc + 0x1)
         zeropageAddress: UInt8 = operand + self.XRegister.value 
         value: UInt8 = self.readByte(zeropageAddress)
-        #self.logInstruction(self.readByte(self.pc).getHex(), "LDY", operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {value.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "LDY", operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {value.getHex()}")
         
         self.YRegister = value
         self.updateNegativeFlag(self.YRegister)
@@ -2282,7 +2296,7 @@ class Ricoh2A03:
         zeropageAddress: UInt8 = operand + self.XRegister.value 
         value: UInt8 = self.readByte(zeropageAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "STY", operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {value.getHex()}")        
+        self.logInstruction(self.readByte(self.pc).getHex(), "STY", operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {value.getHex()}")        
         
         self.RAM.writeAddress(zeropageAddress, self.YRegister.getWriteableInt())
         
@@ -2295,7 +2309,7 @@ class Ricoh2A03:
         zeropageAddress: UInt8 = operand + self.XRegister.value 
         value: UInt8 = self.readByte(zeropageAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "ORA", operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {value.getHex()}")        
+        self.logInstruction(self.readByte(self.pc).getHex(), "ORA", operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {value.getHex()}")        
         
         orResult: Int8 = self.ORA(self.accumulatorRegister, value)
         self.accumulatorRegister = orResult
@@ -2311,7 +2325,7 @@ class Ricoh2A03:
         zeropageAddress: UInt8 = operand + self.XRegister.value 
         value: UInt8 = self.readByte(zeropageAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "AND", operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {value.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "AND", operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {value.getHex()}")
         
         andResult = self.AND_Values(self.accumulatorRegister, value)
         self.accumulatorRegister = andResult
@@ -2327,7 +2341,7 @@ class Ricoh2A03:
         zeropageAddress: UInt8 = operand + self.XRegister.value 
         value: UInt8 = self.readByte(zeropageAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "EOR", operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {value.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "EOR", operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {value.getHex()}")
         
         andResult = self.EOR(self.accumulatorRegister, value)
         self.accumulatorRegister = andResult
@@ -2343,7 +2357,7 @@ class Ricoh2A03:
         zeropageAddress: UInt8 = operand + self.XRegister.value 
         value: UInt8 = self.readByte(zeropageAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "ADC", operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {value.getHex()}")        
+        self.logInstruction(self.readByte(self.pc).getHex(), "ADC", operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {value.getHex()}")        
         
         resultInt8, carryFlag, negativeFlag, zeroFlag = self.ADC(self.accumulatorRegister, value, self.carryFlag)
 
@@ -2361,7 +2375,7 @@ class Ricoh2A03:
         zeropageAddress: UInt8 = operand + self.XRegister.value 
         value: UInt8 = self.readByte(zeropageAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "CMP", operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {value.getHex()}")        
+        self.logInstruction(self.readByte(self.pc).getHex(), "CMP", operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {value.getHex()}")        
         
         compareResult, negativeFlag, zeroFlag, carryFlag = self.compareValues(self.accumulatorRegister, value)
         
@@ -2376,7 +2390,7 @@ class Ricoh2A03:
         zeropageAddress: UInt8 = operand + self.XRegister.value 
         value: UInt8 = self.readByte(zeropageAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "SBC", operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {value.getHex()}")        
+        self.logInstruction(self.readByte(self.pc).getHex(), "SBC", operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {value.getHex()}")        
         
         accumulatorRegister, negativeFlag, zeroFlag, overflowFlag, carryFlag = self.SBC(self.accumulatorRegister, value, self.carryFlag)
         
@@ -2394,7 +2408,7 @@ class Ricoh2A03:
         zeropageAddress: UInt8 = operand + self.XRegister.value 
         value: UInt8 = self.readByte(zeropageAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "STA", operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {value.getHex()}")        
+        self.logInstruction(self.readByte(self.pc).getHex(), "STA", operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {value.getHex()}")        
         
         self.STA(zeropageAddress)
         
@@ -2406,7 +2420,7 @@ class Ricoh2A03:
         zeropageAddress: UInt8 = operand + self.XRegister.value
         value: UInt8 = self.readByte(zeropageAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "LDA", operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {value.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "LDA", operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {value.getHex()}")
         
         self.LDA(zeropageAddress)
         self.updateNegativeFlag(self.accumulatorRegister)
@@ -2420,7 +2434,7 @@ class Ricoh2A03:
         zeropageAddress: UInt8 = operand + self.XRegister.value 
         valueToShift: UInt8 = self.readByte(zeropageAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "LSR", operand1=operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {valueToShift.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "LSR", operand1=operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {valueToShift.getHex()}")
         
         result, carryFlag, negativeFlag, zeroFlag = self.LSR(valueToShift)
         self.RAM.writeAddress(zeropageAddress, result.getWriteableInt())
@@ -2436,7 +2450,7 @@ class Ricoh2A03:
         zeropageAddress: UInt8 = operand + self.XRegister.value 
         valueToShift: UInt8 = self.readByte(zeropageAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "ASL", operand1=operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {valueToShift.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "ASL", operand1=operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {valueToShift.getHex()}")
         
         result, carryFlag, negativeFlag, zeroFlag = self.ASL(valueToShift)
         
@@ -2453,7 +2467,7 @@ class Ricoh2A03:
         zeropageAddress: UInt8 = operand + self.XRegister.value 
         valueToShift: UInt8 = self.readByte(zeropageAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "ROR", operand1=operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {valueToShift.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "ROR", operand1=operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {valueToShift.getHex()}")
         
         result, carryFlag, negativeFlag, zeroFlag = self.ROR(valueToShift, self.carryFlag)
         
@@ -2469,7 +2483,7 @@ class Ricoh2A03:
         operand: UInt8 = self.readByte(self.pc + 0x1)
         zeropageAddress: UInt8 = operand + self.XRegister.value 
         valueToShift: UInt8 = self.readByte(zeropageAddress)
-        #self.logInstruction(self.readByte(self.pc).getHex(), "ROL", operand1=operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {valueToShift.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "ROL", operand1=operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {valueToShift.getHex()}")
         
         result, carryFlag, negativeFlag, zeroFlag = self.ROL(valueToShift, self.carryFlag)
         self.RAM.writeAddress(zeropageAddress, result.getWriteableInt())
@@ -2484,7 +2498,7 @@ class Ricoh2A03:
         operand: UInt8 = self.readByte(self.pc + 0x1)
         zeropageAddress: UInt8 = operand + self.XRegister.value 
         valueToIncrement: UInt8 = self.readByte(zeropageAddress)
-        #self.logInstruction(self.readByte(self.pc).getHex(), "INC", operand1=operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {valueToIncrement.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "INC", operand1=operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {valueToIncrement.getHex()}")
         
         newValue = valueToIncrement + 1
         self.RAM.writeAddress(zeropageAddress, newValue.getWriteableInt())
@@ -2499,7 +2513,7 @@ class Ricoh2A03:
         operand: UInt8 = self.readByte(self.pc + 0x1)
         zeropageAddress: UInt8 = operand + self.XRegister.value 
         valueToIncrement: UInt8 = self.readByte(zeropageAddress)
-        #self.logInstruction(self.readByte(self.pc).getHex(), "DEC", operand1=operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {valueToIncrement.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "DEC", operand1=operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {valueToIncrement.getHex()}")
         
         newValue = valueToIncrement - 1
         self.RAM.writeAddress(zeropageAddress, newValue.getWriteableInt())
@@ -2514,7 +2528,7 @@ class Ricoh2A03:
         operand: UInt8 = self.readByte(self.pc + 0x1)
         zeropageAddress: UInt8 = operand + self.YRegister.value 
         value: UInt8 = self.readByte(zeropageAddress)
-        #self.logInstruction(self.readByte(self.pc).getHex(), "LDX", operand.getHex(), instructionParameter=f"${operand.getHex()},Y @ {zeropageAddress.getHex()} = {value.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "LDX", operand.getHex(), instructionParameter=f"${operand.getHex()},Y @ {zeropageAddress.getHex()} = {value.getHex()}")
         
         self.XRegister = value
         self.updateNegativeFlag(self.XRegister)
@@ -2528,7 +2542,7 @@ class Ricoh2A03:
         zeropageAddress: UInt8 = operand + self.YRegister.value 
         value: UInt8 = self.readByte(zeropageAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "STX", operand.getHex(), instructionParameter=f"${operand.getHex()},Y @ {zeropageAddress.getHex()} = {value.getHex()}")        
+        self.logInstruction(self.readByte(self.pc).getHex(), "STX", operand.getHex(), instructionParameter=f"${operand.getHex()},Y @ {zeropageAddress.getHex()} = {value.getHex()}")        
         
         self.RAM.writeAddress(zeropageAddress, self.XRegister.getWriteableInt())
         
@@ -2542,7 +2556,7 @@ class Ricoh2A03:
         effectiveAddress: UInt16 = fullAddress + self.XRegister.getWriteableInt()
         valueFromMemory: UInt8 = self.readByte(effectiveAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "LDY", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "LDY", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")
         
         self.YRegister = valueFromMemory
         self.updateNegativeFlag(self.YRegister)
@@ -2558,7 +2572,7 @@ class Ricoh2A03:
         effectiveAddress: UInt16 = fullAddress + self.XRegister.getWriteableInt()
         valueFromMemory: UInt8 = self.readByte(effectiveAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "ORA", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")        
+        self.logInstruction(self.readByte(self.pc).getHex(), "ORA", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")        
         
         orResult: Int8 = self.ORA(self.accumulatorRegister, valueFromMemory)
         self.accumulatorRegister = orResult
@@ -2576,7 +2590,7 @@ class Ricoh2A03:
         effectiveAddress: UInt16 = fullAddress + self.XRegister.getWriteableInt()
         valueFromMemory: UInt8 = self.readByte(effectiveAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "AND", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "AND", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")
         
         andResult = self.AND_Values(self.accumulatorRegister, valueFromMemory)
         self.accumulatorRegister = andResult
@@ -2594,7 +2608,7 @@ class Ricoh2A03:
         effectiveAddress: UInt16 = fullAddress + self.XRegister.getWriteableInt()
         valueFromMemory: UInt8 = self.readByte(effectiveAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "EOR", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "EOR", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")
         
         andResult = self.EOR(self.accumulatorRegister, valueFromMemory)
         self.accumulatorRegister = andResult
@@ -2612,7 +2626,7 @@ class Ricoh2A03:
         effectiveAddress: UInt16 = fullAddress + self.XRegister.getWriteableInt()
         valueFromMemory: UInt8 = self.readByte(effectiveAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "ADC", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")        
+        self.logInstruction(self.readByte(self.pc).getHex(), "ADC", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")        
         
         resultInt8, carryFlag, negativeFlag, zeroFlag = self.ADC(self.accumulatorRegister, valueFromMemory, self.carryFlag)
 
@@ -2632,7 +2646,7 @@ class Ricoh2A03:
         effectiveAddress: UInt16 = fullAddress + self.XRegister.getWriteableInt()
         valueFromMemory: UInt8 = self.readByte(effectiveAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "CMP", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")        
+        self.logInstruction(self.readByte(self.pc).getHex(), "CMP", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")        
         
         compareResult, negativeFlag, zeroFlag, carryFlag = self.compareValues(self.accumulatorRegister, valueFromMemory)
         
@@ -2650,7 +2664,7 @@ class Ricoh2A03:
         effectiveAddress: UInt16 = fullAddress + self.XRegister.getWriteableInt()
         valueFromMemory: UInt8 = self.readByte(effectiveAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "SBC", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")        
+        self.logInstruction(self.readByte(self.pc).getHex(), "SBC", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")        
         
         accumulatorRegister, negativeFlag, zeroFlag, overflowFlag, carryFlag = self.SBC(self.accumulatorRegister, valueFromMemory, self.carryFlag)
         
@@ -2670,7 +2684,7 @@ class Ricoh2A03:
         effectiveAddress: UInt16 = fullAddress + self.XRegister.getWriteableInt()
         valueFromMemory: UInt8 = self.readByte(effectiveAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "STA", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")        
+        self.logInstruction(self.readByte(self.pc).getHex(), "STA", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")        
         
         self.STA(effectiveAddress)
         
@@ -2684,7 +2698,7 @@ class Ricoh2A03:
         effectiveAddress: UInt16 = fullAddress + self.XRegister.getWriteableInt()
         valueFromMemory: UInt8 = self.readByte(effectiveAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "LDA", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "LDA", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")
         
         self.LDA(effectiveAddress)
         self.updateNegativeFlag(self.accumulatorRegister)
@@ -2700,7 +2714,7 @@ class Ricoh2A03:
         effectiveAddress: UInt16 = fullAddress + self.XRegister.getWriteableInt()
         valueFromMemory: UInt8 = self.readByte(effectiveAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "LSR", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "LSR", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")
         
         result, carryFlag, negativeFlag, zeroFlag = self.LSR(valueFromMemory)
         self.RAM.writeAddress(effectiveAddress, result.getWriteableInt())
@@ -2718,7 +2732,7 @@ class Ricoh2A03:
         effectiveAddress: UInt16 = fullAddress + self.XRegister.getWriteableInt()
         valueFromMemory: UInt8 = self.readByte(effectiveAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "ASL", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "ASL", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")
         
         result, carryFlag, negativeFlag, zeroFlag = self.ASL(valueFromMemory)
         
@@ -2737,7 +2751,7 @@ class Ricoh2A03:
         effectiveAddress: UInt16 = fullAddress + self.XRegister.getWriteableInt()
         valueFromMemory: UInt8 = self.readByte(effectiveAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "ROR", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "ROR", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")
         
         result, carryFlag, negativeFlag, zeroFlag = self.ROR(valueFromMemory, self.carryFlag)
         
@@ -2755,7 +2769,7 @@ class Ricoh2A03:
         fullAddress: UInt16 = self.combineTwoBytesToOneAddress(operand2, operand1)
         effectiveAddress: UInt16 = fullAddress + self.XRegister.getWriteableInt()
         valueFromMemory: UInt8 = self.readByte(effectiveAddress)
-        #self.logInstruction(self.readByte(self.pc).getHex(), "ROL", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "ROL", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")
         
         result, carryFlag, negativeFlag, zeroFlag = self.ROL(valueFromMemory, self.carryFlag)
         self.RAM.writeAddress(effectiveAddress, result.getWriteableInt())
@@ -2772,7 +2786,7 @@ class Ricoh2A03:
         fullAddress: UInt16 = self.combineTwoBytesToOneAddress(operand2, operand1)
         effectiveAddress: UInt16 = fullAddress + self.XRegister.getWriteableInt()
         valueFromMemory: UInt8 = self.readByte(effectiveAddress)
-        #self.logInstruction(self.readByte(self.pc).getHex(), "INC", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "INC", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")
         
         newValue = valueFromMemory + 1
         self.RAM.writeAddress(effectiveAddress, newValue.getWriteableInt())
@@ -2789,7 +2803,7 @@ class Ricoh2A03:
         fullAddress: UInt16 = self.combineTwoBytesToOneAddress(operand2, operand1)
         effectiveAddress: UInt16 = fullAddress + self.XRegister.getWriteableInt()
         valueFromMemory: UInt8 = self.readByte(effectiveAddress)
-        #self.logInstruction(self.readByte(self.pc).getHex(), "DEC", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "DEC", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")
         
         newValue = valueFromMemory - 1
         self.RAM.writeAddress(effectiveAddress, newValue.getWriteableInt())
@@ -2807,7 +2821,7 @@ class Ricoh2A03:
         effectiveAddress: UInt16 = fullAddress + self.YRegister.getWriteableInt()
         valueFromMemory: UInt8 = self.readByte(effectiveAddress)
 
-        #self.logInstruction(self.readByte(self.pc).getHex(), "LDX", operand1.getHex(), operand2.getHex(), instructionParameter=f"${fullAddress.getHex()},Y @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")
+        self.logInstruction(self.readByte(self.pc).getHex(), "LDX", operand1.getHex(), operand2.getHex(), instructionParameter=f"${fullAddress.getHex()},Y @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")
 
         self.XRegister = valueFromMemory
 
@@ -2821,14 +2835,14 @@ class Ricoh2A03:
     
     # ILLEGAL OPCODES
     def IllegalNOP_OneByte(self):
-        #self.logInstruction(self.readByte(self.pc).getHex(), "NOP", isIllegal=True)
+        self.logInstruction(self.readByte(self.pc).getHex(), "NOP", isIllegal=True)
         return 2
     
     def IllegalNOP_TwoByte(self):
         operand = self.readByte(self.pc + 0x1)
         opcodeHex = self.readByte(self.pc).getHex()
         
-        #self.logInstruction(opcodeHex, "NOP", operand1=operand.getHex(), isIllegal=True)
+        self.logInstruction(opcodeHex, "NOP", operand1=operand.getHex(), isIllegal=True)
         self.pc += 0x1
         return 2
     
@@ -2837,7 +2851,7 @@ class Ricoh2A03:
         operand2 = self.readByte(self.pc + 0x2)
         opcodeHex = self.readByte(self.pc).getHex()
         
-        #self.logInstruction(opcodeHex, "NOP", operand1=operand1.getHex(), operand2=operand2.getHex(), isIllegal=True)
+        self.logInstruction(opcodeHex, "NOP", operand1=operand1.getHex(), operand2=operand2.getHex(), isIllegal=True)
         self.pc += 0x2
         return 2
     
@@ -2849,7 +2863,7 @@ class Ricoh2A03:
         fullAddress: UInt16 = self.combineTwoBytesToOneAddress(highAddressByte, lowAddressByte)
         value: UInt8 = self.readByte(fullAddress)
 
-        #self.logInstruction(self.readByte(self.pc).getHex(), "LAX", operand1=operand.getHex(), instructionParameter=f"(${operand.getHex()},X) @ {zeropageAddress.getHex()} = {fullAddress.getHex()} = {value.getHex()}", isIllegal=True)
+        self.logInstruction(self.readByte(self.pc).getHex(), "LAX", operand1=operand.getHex(), instructionParameter=f"(${operand.getHex()},X) @ {zeropageAddress.getHex()} = {fullAddress.getHex()} = {value.getHex()}", isIllegal=True)
 
         self.LAX(value)
         
@@ -2860,7 +2874,7 @@ class Ricoh2A03:
         operand: UInt8 = self.readByte(self.pc + 0x1)
         value: UInt8 = self.readByte(operand)
 
-        #self.logInstruction(self.readByte(self.pc).getHex(), "LAX", operand1=operand.getHex(), instructionParameter=f"${operand.getHex()} = {value.getHex()}", isIllegal=True)
+        self.logInstruction(self.readByte(self.pc).getHex(), "LAX", operand1=operand.getHex(), instructionParameter=f"${operand.getHex()} = {value.getHex()}", isIllegal=True)
 
         self.LAX(value)
         
@@ -2873,7 +2887,7 @@ class Ricoh2A03:
         address: UInt16 = self.combineTwoBytesToOneAddress(operand2, operand1)
         value: UInt8 = self.readByte(address)
 
-        #self.logInstruction(self.readByte(self.pc).getHex(), "LAX", operand1.getHex(), operand2.getHex(), instructionParameter=f"${address.getHex()} = {value.getHex()}", isIllegal=True)
+        self.logInstruction(self.readByte(self.pc).getHex(), "LAX", operand1.getHex(), operand2.getHex(), instructionParameter=f"${address.getHex()} = {value.getHex()}", isIllegal=True)
 
         self.LAX(value)
         
@@ -2888,7 +2902,7 @@ class Ricoh2A03:
         newAddress: UInt8 = baseAddress + self.YRegister.getWriteableInt()
         valueToTest: UInt8 = self.readByte(newAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "LAX", operand.getHex(), instructionParameter=f"(${operand.getHex()}),Y = {baseAddress.getHex()} @ {newAddress.getHex()} = {valueToTest.getHex()}", isIllegal=True)        
+        self.logInstruction(self.readByte(self.pc).getHex(), "LAX", operand.getHex(), instructionParameter=f"(${operand.getHex()}),Y = {baseAddress.getHex()} @ {newAddress.getHex()} = {valueToTest.getHex()}", isIllegal=True)        
         
         self.LAX(valueToTest)
         
@@ -2900,7 +2914,7 @@ class Ricoh2A03:
         zeropageAddress: UInt8 = operand + self.YRegister.value
         value: UInt8 = self.readByte(zeropageAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "LAX", operand.getHex(), instructionParameter=f"${operand.getHex()},Y @ {zeropageAddress.getHex()} = {value.getHex()}", isIllegal=True)
+        self.logInstruction(self.readByte(self.pc).getHex(), "LAX", operand.getHex(), instructionParameter=f"${operand.getHex()},Y @ {zeropageAddress.getHex()} = {value.getHex()}", isIllegal=True)
         
         self.LAX(value)
         
@@ -2914,14 +2928,14 @@ class Ricoh2A03:
         effectiveAddress: UInt16 = fullAddress + self.YRegister.getWriteableInt()
         valueFromMemory: UInt8 = self.readByte(effectiveAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "LAX", operand1.getHex(), operand2=operand2.getHex(), instructionParameter=f"${fullAddress.getHex()},Y @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}", isIllegal=True)        
+        self.logInstruction(self.readByte(self.pc).getHex(), "LAX", operand1.getHex(), operand2=operand2.getHex(), instructionParameter=f"${fullAddress.getHex()},Y @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}", isIllegal=True)        
         
         self.LAX(valueFromMemory)
         
         self.pc += 0x2
         return 4
     
-    def IndirectX_SAX(self):
+    def IllegalIndirectX_SAX(self):
         operand: UInt8 = self.readByte(self.pc + 0x1)
         zeropageAddress: UInt8 = operand + self.XRegister
         lowAddressByte: UInt8 = self.readByte(zeropageAddress)
@@ -2929,7 +2943,7 @@ class Ricoh2A03:
         fullAddress: UInt16 = self.combineTwoBytesToOneAddress(highAddressByte, lowAddressByte)
         memoryBefore: UInt8 = self.readByte(fullAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "SAX", operand.getHex(), instructionParameter=f"(${operand.getHex()},X) @ {(zeropageAddress).getHex()} = {fullAddress.getHex()} = {memoryBefore.getHex()}", isIllegal=True)
+        self.logInstruction(self.readByte(self.pc).getHex(), "SAX", operand.getHex(), instructionParameter=f"(${operand.getHex()},X) @ {(zeropageAddress).getHex()} = {fullAddress.getHex()} = {memoryBefore.getHex()}", isIllegal=True)
         
         andResult: Int8 = self.AND_Values(self.accumulatorRegister, self.XRegister)
         self.RAM.writeAddress(fullAddress, andResult.getWriteableInt())
@@ -2937,11 +2951,11 @@ class Ricoh2A03:
         self.pc += 0x1
         return 6
     
-    def ZeropageSAX(self):
+    def IllegalZeropageSAX(self):
         operand: UInt8 = self.readByte(self.pc + 0x1)
         value: UInt8 = self.readByte(operand)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "SAX", operand.getHex(), instructionParameter=f"${operand.getHex()} = {value.getHex()}", isIllegal=True)
+        self.logInstruction(self.readByte(self.pc).getHex(), "SAX", operand.getHex(), instructionParameter=f"${operand.getHex()} = {value.getHex()}", isIllegal=True)
         
         andResult = self.AND_Values(self.accumulatorRegister, self.XRegister)
         self.RAM.writeAddress(operand, andResult.getWriteableInt())
@@ -2949,13 +2963,13 @@ class Ricoh2A03:
         self.pc += 0x1
         return 3
     
-    def AbsoluteSAX(self):
+    def IllegalAbsoluteSAX(self):
         PCL: UInt8 = self.readByte(self.pc + 0x1)
         PCH: UInt8 = self.readByte(self.pc + 0x2)
         address: UInt16 = self.combineTwoBytesToOneAddress(PCH, PCL)
         valueToTest: UInt8 = self.readByte(address)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "SAX", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToTest.getHex()}", isIllegal=True)
+        self.logInstruction(self.readByte(self.pc).getHex(), "SAX", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToTest.getHex()}", isIllegal=True)
         
         andResult = self.AND_Values(self.accumulatorRegister, self.XRegister)
         self.RAM.writeAddress(address, andResult.getWriteableInt())
@@ -2963,12 +2977,12 @@ class Ricoh2A03:
         self.pc += 0x2
         return 4
     
-    def ZeropageY_SAX(self):
+    def IllegalZeropageY_SAX(self):
         operand: UInt8 = self.readByte(self.pc + 0x1)
         zeropageAddress: UInt8 = operand + self.YRegister.value 
         value: UInt8 = self.readByte(zeropageAddress)
         
-        #self.logInstruction(self.readByte(self.pc).getHex(), "SAX", operand.getHex(), instructionParameter=f"${operand.getHex()},Y @ {zeropageAddress.getHex()} = {value.getHex()}", isIllegal=True)
+        self.logInstruction(self.readByte(self.pc).getHex(), "SAX", operand.getHex(), instructionParameter=f"${operand.getHex()},Y @ {zeropageAddress.getHex()} = {value.getHex()}", isIllegal=True)
         
         andResult = self.AND_Values(self.accumulatorRegister, self.XRegister)
         self.RAM.writeAddress(zeropageAddress, andResult.getWriteableInt())
@@ -2979,6 +2993,44 @@ class Ricoh2A03:
     def IllegalSBC(self): #USBC
         return self.ImmediateSBC(illegal=True)
     
+    def IllegalIndirectX_DCP(self):
+        operand: UInt8 = self.readByte(self.pc + 0x1)
+        zeropageAddress: UInt8 = operand + self.XRegister
+        lowAddressByte: UInt8 = self.readByte(zeropageAddress)
+        highAddressByte: UInt8 = self.readByte(zeropageAddress + 0x1)
+        fullAddress: UInt16 = self.combineTwoBytesToOneAddress(highAddressByte, lowAddressByte)
+        memoryBefore: UInt8 = self.readByte(fullAddress)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "DCP", operand.getHex(), instructionParameter=f"(${operand.getHex()},X) @ {(zeropageAddress).getHex()} = {fullAddress.getHex()} = {memoryBefore.getHex()}", isIllegal=True)
+        
+        memoryBefore -= 1
+        self.RAM.writeAddress(fullAddress, memoryBefore.getWriteableInt())
+        
+        compareResult, negativeFlag, zeroFlag, carryFlag = self.compareValues(self.accumulatorRegister, memoryBefore)
+        self.negativeFlag = negativeFlag
+        self.zeroFlag = zeroFlag
+        self.carryFlag = carryFlag
+        
+        self.pc += 0x1
+        return 8
+    
+    def IllegalZeropage_DCP(self):
+        operand: UInt8 = self.readByte(self.pc + 0x1)
+        operandValue: UInt8 = self.readByte(operand)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "DCP", operand.getHex(), instructionParameter=f"${operand.getHex()} = {operandValue.getHex()}", isIllegal=True)        
+        
+        operandValue -= 1
+        self.RAM.writeAddress(operand, operandValue.getWriteableInt())
+        
+        compareResult, negativeFlag, zeroFlag, carryFlag = self.compareValues(self.accumulatorRegister, operandValue)
+        self.negativeFlag = negativeFlag
+        self.zeroFlag = zeroFlag
+        self.carryFlag = carryFlag
+        
+        self.pc += 0x1
+        return 5
+    
     
     
     def empty(self): return 0
@@ -2988,222 +3040,6 @@ class Ricoh2A03:
     def decodeInstruction(self, instructionInt8: Int8):
         instruction = instructionInt8.value
         if self.doPrint: print(f"Decoding instruction ~ byte: {instruction}; hex: {hex(instruction)}; program counter: {self.pc.getHex()}")
-        
-        """
-        # High the low nibble
-        if instruction   == 0x00: pass
-        elif instruction == 0x01: return self.IndirectX_ORA
-        elif instruction == 0x05: return self.ZeropageORA
-        elif instruction == 0x06: return self.ZeropageASL
-        elif instruction == 0x08: return self.PHP
-        elif instruction == 0x09: return self.ImmediateORA
-        elif instruction == 0x0A: return self.AccumulatorASL
-        elif instruction == 0x0D: return self.AbsoluteORA
-        elif instruction == 0x0E: return self.AbsoluteASL
-        
-        elif instruction == 0x10: return self.BPL
-        elif instruction == 0x11: return self.IndirectY_ORA
-        elif instruction == 0x15: return self.ZeropageX_ORA
-        elif instruction == 0x16: return self.ZeropageX_ASL
-        elif instruction == 0x18: return self.CLC
-        elif instruction == 0x19: return self.AbsoluteY_ORA
-        elif instruction == 0x1D: return self.AbsoluteX_ORA
-        elif instruction == 0x1E: return self.AbsoluteX_ASL
-        
-        elif instruction == 0x20: return self.JSR
-        elif instruction == 0x21: return self.IndirectX_AND
-        elif instruction == 0x24: return self.ZeropageBIT
-        elif instruction == 0x25: return self.ZeropageAND
-        elif instruction == 0x26: return self.ZeropageROL
-        elif instruction == 0x28: return self.PLP
-        elif instruction == 0x29: return self.ImmediateAND
-        elif instruction == 0x2A: return self.AccumulatorROL
-        elif instruction == 0x2C: return self.AbsoluteBIT
-        elif instruction == 0x2D: return self.AbsoluteAND
-        elif instruction == 0x2E: return self.AbsoluteROL
-        
-        elif instruction == 0x30: return self.BMI
-        elif instruction == 0x31: return self.IndirectY_AND
-        elif instruction == 0x35: return self.ZeropageX_AND
-        elif instruction == 0x36: return self.ZeropageX_ROL
-        elif instruction == 0x38: return self.SEC
-        elif instruction == 0x39: return self.AbsoluteY_AND
-        elif instruction == 0x3D: return self.AbsoluteX_AND
-        elif instruction == 0x3E: return self.AbsoluteX_ROL
-        
-        elif instruction == 0x40: return self.RTI
-        elif instruction == 0x41: return self.IndirectX_EOR
-        elif instruction == 0x45: return self.ZeropageEOR
-        elif instruction == 0x46: return self.ZeropageLSR
-        elif instruction == 0x48: return self.PHA
-        elif instruction == 0x49: return self.ImmediateEOR
-        elif instruction == 0x4A: return self.AccumulatorLSR
-        elif instruction == 0x4C: return self.AbsoluteJMP
-        elif instruction == 0x4D: return self.AbsoluteEOR
-        elif instruction == 0x4E: return self.AbsoluteLSR
-        
-        elif instruction == 0x50: return self.BVC
-        elif instruction == 0x51: return self.IndirectY_EOR
-        elif instruction == 0x55: return self.ZeropageX_EOR
-        elif instruction == 0x56: return self.ZeropageX_LSR
-        elif instruction == 0x58: pass
-        elif instruction == 0x59: return self.AbsoluteY_EOR
-        elif instruction == 0x5D: return self.AbsoluteX_EOR
-        elif instruction == 0x5E: return self.AbsoluteX_LSR
-        
-        elif instruction == 0x60: return self.RTS
-        elif instruction == 0x61: return self.IndirectX_ADC
-        elif instruction == 0x65: return self.ZeropageADC
-        elif instruction == 0x66: return self.ZeropageROR
-        elif instruction == 0x68: return self.PLA
-        elif instruction == 0x69: return self.ImmediateADC
-        elif instruction == 0x6A: return self.AccumulatorROR
-        elif instruction == 0x6C: return self.IndirectJMP
-        elif instruction == 0x6D: return self.AbsoluteADC
-        elif instruction == 0x6E: return self.AbsoluteROR
-        
-        elif instruction == 0x70: return self.BVS
-        elif instruction == 0x71: return self.IndirectY_ADC
-        elif instruction == 0x75: return self.ZeropageX_ADC
-        elif instruction == 0x76: return self.ZeropageX_ROR
-        elif instruction == 0x78: return self.SEI
-        elif instruction == 0x79: return self.AbsoluteY_ADC
-        elif instruction == 0x7D: return self.AbsoluteX_ADC
-        elif instruction == 0x7E: return self.AbsoluteX_ROR
-        
-        elif instruction == 0x81: return self.IndirectX_STA
-        elif instruction == 0x84: return self.ZeropageSTY
-        elif instruction == 0x85: return self.ZeropageSTA
-        elif instruction == 0x86: return self.ZeropageSTX
-        elif instruction == 0x88: return self.DEY
-        elif instruction == 0x8A: return self.TXA
-        elif instruction == 0x8C: return self.AbsoluteSTY
-        elif instruction == 0x8D: return self.AbsoluteSTA
-        elif instruction == 0x8E: return self.AbsoluteSTX
-        
-        elif instruction == 0x90: return self.BCC
-        elif instruction == 0x91: return self.IndirectY_STA
-        elif instruction == 0x94: return self.ZeropageX_STY
-        elif instruction == 0x95: return self.ZeropageX_STA
-        elif instruction == 0x96: return self.ZeropageY_STX
-        elif instruction == 0x98: return self.TYA
-        elif instruction == 0x99: return self.AbsoluteY_STA
-        elif instruction == 0x9A: return self.TXS
-        elif instruction == 0x9D: return self.AbsoluteX_STA
-        
-        elif instruction == 0xA0: return self.ImmediateLDY
-        elif instruction == 0xA1: return self.IndirectX_LDA
-        elif instruction == 0xA2: return self.ImmediateLDX
-        elif instruction == 0xA4: return self.ZeropageLDY
-        elif instruction == 0xA5: return self.ZeropageLDA
-        elif instruction == 0xA6: return self.ZeropageLDX
-        elif instruction == 0xA8: return self.TAY
-        elif instruction == 0xA9: return self.ImmediateLDA
-        elif instruction == 0xAA: return self.TAX
-        elif instruction == 0xAC: return self.AbsoluteLDY
-        elif instruction == 0xAD: return self.AbsoluteLDA
-        elif instruction == 0xAE: return self.AbsoluteLDX
-        
-        elif instruction == 0xB0: return self.BCS
-        elif instruction == 0xB1: return self.IndirectY_LDA
-        elif instruction == 0xB4: return self.ZeropageX_LDY
-        elif instruction == 0xB5: return self.ZeropageX_LDA
-        elif instruction == 0xB6: return self.ZeropageY_LDX
-        elif instruction == 0xB8: return self.CLV
-        elif instruction == 0xB9: return self.AbsoluteY_LDA
-        elif instruction == 0xBA: return self.TSX
-        elif instruction == 0xBC: return self.AbsoluteX_LDY
-        elif instruction == 0xBD: return self.AbsoluteX_LDA
-        elif instruction == 0xBE: return self.AbsoluteY_LDX
-        
-        elif instruction == 0xC0: return self.ImmediateCPY
-        elif instruction == 0xC1: return self.IndirectX_CMP
-        elif instruction == 0xC4: return self.ZeropageCPY
-        elif instruction == 0xC5: return self.ZeropageCMP
-        elif instruction == 0xC6: return self.ZeropageDEC
-        elif instruction == 0xC8: return self.INY
-        elif instruction == 0xC9: return self.ImmediateCMP
-        elif instruction == 0xCA: return self.DEX
-        elif instruction == 0xCC: return self.AbsoluteCPY
-        elif instruction == 0xCD: return self.AbsoluteCMP
-        elif instruction == 0xCE: return self.AbsoluteDEC
-        
-        elif instruction == 0xD0: return self.BNE
-        elif instruction == 0xD1: return self.IndirectY_CMP
-        elif instruction == 0xD5: return self.ZeropageX_CMP
-        elif instruction == 0xD6: return self.ZeropageX_DEC
-        elif instruction == 0xD8: return self.CLD
-        elif instruction == 0xD9: return self.AbsoluteY_CMP
-        elif instruction == 0xDD: return self.AbsoluteX_CMP
-        elif instruction == 0xDE: return self.AbsoluteX_DEC
-
-        elif instruction == 0xE0: return self.ImmediateCPX
-        elif instruction == 0xE1: return self.IndirectX_SBC
-        elif instruction == 0xE4: return self.ZeropageCPX
-        elif instruction == 0xE5: return self.ZeropageSBC
-        elif instruction == 0xE6: return self.ZeropageINC
-        elif instruction == 0xE8: return self.INX
-        elif instruction == 0xE9: return self.ImmediateSBC
-        elif instruction == 0xEA: return self.NOP
-        elif instruction == 0xEC: return self.AbsoluteCPX
-        elif instruction == 0xED: return self.AbsoluteSBC
-        elif instruction == 0xEE: return self.AbsoluteINC
-
-        elif instruction == 0xF0: return self.BEQ
-        elif instruction == 0xF1: return self.IndirectY_SBC
-        elif instruction == 0xF5: return self.ZeropageX_SBC
-        elif instruction == 0xF6: return self.ZeropageX_INC
-        elif instruction == 0xF8: return self.SED
-        elif instruction == 0xF9: return self.AbsoluteY_SBC
-        elif instruction == 0xFD: return self.AbsoluteX_SBC
-        elif instruction == 0xFE: return self.AbsoluteX_INC
-        
-        
-        # Illegal Opcodes
-        elif instruction == 0xA3: return self.IllegalIndirectX_LAX
-        elif instruction == 0xA7: return self.IllegalZeropageLAX
-        elif instruction == 0xAF: return self.IllegalAbsoluteLAX
-        elif instruction == 0xB3: return self.IllegalIndirectY_LAX
-        elif instruction == 0xB7: return self.IllegalZeropageY_LAX
-        elif instruction == 0xBF: return self.IllegalAbsoluteY_LAX
-        
-        elif instruction == 0x83: return self.IndirectX_SAX
-        elif instruction == 0x87: return self.ZeropageSAX
-        elif instruction == 0x8F: return self.AbsoluteSAX
-        elif instruction == 0x97: return self.ZeropageY_SAX
-        
-        elif instruction == 0xEB: return self.IllegalSBC
-        
-        elif instruction == 0x1A: return self.IllegalNOP_OneByte
-        elif instruction == 0x3A: return self.IllegalNOP_OneByte
-        elif instruction == 0x5A: return self.IllegalNOP_OneByte
-        elif instruction == 0x7A: return self.IllegalNOP_OneByte
-        elif instruction == 0xDA: return self.IllegalNOP_OneByte
-        elif instruction == 0xFA: return self.IllegalNOP_OneByte
-        
-        elif instruction == 0x80: return self.IllegalNOP_TwoByte
-        elif instruction == 0x82: return self.IllegalNOP_TwoByte
-        elif instruction == 0x89: return self.IllegalNOP_TwoByte
-        elif instruction == 0xC2: return self.IllegalNOP_TwoByte
-        elif instruction == 0xE2: return self.IllegalNOP_TwoByte
-        elif instruction == 0x04: return self.IllegalNOP_TwoByte
-        elif instruction == 0x44: return self.IllegalNOP_TwoByte
-        elif instruction == 0x64: return self.IllegalNOP_TwoByte
-        elif instruction == 0x14: return self.IllegalNOP_TwoByte
-        elif instruction == 0x34: return self.IllegalNOP_TwoByte
-        elif instruction == 0x54: return self.IllegalNOP_TwoByte
-        elif instruction == 0x74: return self.IllegalNOP_TwoByte
-        elif instruction == 0xD4: return self.IllegalNOP_TwoByte
-        elif instruction == 0xF4: return self.IllegalNOP_TwoByte
-        
-        elif instruction == 0x0C: return self.IllegalNOP_ThreeByte
-        elif instruction == 0x1C: return self.IllegalNOP_ThreeByte
-        elif instruction == 0x3C: return self.IllegalNOP_ThreeByte
-        elif instruction == 0x5C: return self.IllegalNOP_ThreeByte
-        elif instruction == 0x7C: return self.IllegalNOP_ThreeByte
-        elif instruction == 0xDC: return self.IllegalNOP_ThreeByte
-        elif instruction == 0xFC: return self.IllegalNOP_ThreeByte
-        """
         
         if instruction in self.opcodes: return self.opcodes[instruction]
         else:

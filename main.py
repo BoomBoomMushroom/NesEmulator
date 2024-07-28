@@ -58,7 +58,7 @@ console = NES()
 #console.loadROM(romDataBinary)
 console.insertCartridge(nestestCartridge)
 
-#console.cpu.disassembleInstructions(0xc004, 0xc0FF)
+#console.cpu.disassembleInstructions(0xc004, 0xc2BF)
 
 isPaused = True
 unpausedForOneTick = False
@@ -96,6 +96,7 @@ def updateScreen():
     screen.tick()
 
 cpuInstructionLog = open("cpuInstructionLog.txt", "w")
+writes = 0
 
 while True:
     if unpausedForOneTick: isPaused = False
@@ -104,7 +105,11 @@ while True:
         updateScreen()
         continue
     
-    cpuInstructionLog.write(f"{console.cpu.pc.getHex()}\n")
+    #if console.totalCycles % 3 == 0:
+    #    writes += 1
+    #    cpuInstructionLog.write(f"{console.cpu.pc.getHex()}\n")
+    
+    #if writes >= 59449: break
     
     responses = console.step()
     if responses[0] == -1:
@@ -124,9 +129,8 @@ while True:
     
     updateScreen()
 
-cpuInstructionLog.close()
-
 with open("cpuOutputLog.txt", "w") as f: f.write(console.cpu.outputLog)
+cpuInstructionLog.close()
 
 if input("Dump CPU RAM? (y/n) ")=="y":
     print(console.ram.dumpRAM())

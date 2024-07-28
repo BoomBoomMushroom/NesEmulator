@@ -23,12 +23,11 @@ class Int:
         #self.value = self.clampValueToRange(value, False, True)
         self.value = self.valueTransformToType(value)
 
-    def getHex(self, prefix=False) -> str:
+    def getHex(self) -> str:
         hexStr = hex(self.valueToTwosComplementPositiveHex(self.value))
         hexPart = hexStr[2::]
-        hexPart.zfill(self.bits // 4)
+        hexPart = hexPart.zfill(self.bits // 4)
         hexPart = hexPart.upper()
-        if prefix == True: hexPart = "0x" + hexPart
         return hexPart
 
     def hexToTypeIntValue(self, hex: str) -> int:
@@ -169,7 +168,7 @@ class Int:
         return newInt
     
     def __str__(self) -> str:
-        return type(self).__name__ + f"({self.value} ~ {self.getHex(True)})"
+        return type(self).__name__ + f"({self.value} ~ 0x{self.getHex()})"
         #return f"Value: {self.value} ; Hex: {self.getHex(True)} ; Overflow: {self.didOverflow}"
 
 class Int8(Int):
