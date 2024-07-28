@@ -1522,7 +1522,7 @@ class Ricoh2A03:
         
         self.logInstruction(self.readByte(self.pc).getHex(), "ORA", operand.getHex(), instructionParameter=f"${operand.getHex()} = {operandValue.getHex()}")
         
-        orResult: Int8 = self.ORA(self.accumulatorRegister, operandValue)
+        orResult: Int8 = self.ORA(self.accumulatorRegister, operandValue.getWriteableInt())
         self.accumulatorRegister = orResult
         
         self.updateNegativeFlag(self.accumulatorRegister)

@@ -52,6 +52,7 @@ class NES():
         return (cpuResponse, ppuResponse, 0)
 
 nestestCartridge = Cartridge("nestest.nes")
+#dkCartridge = Cartridge("Donkey Kong.nes")
 
 screen = Screen()
 console = NES()
@@ -92,7 +93,7 @@ def updateScreen():
         f"${console.cpu.XRegister.getHex()}  [{console.cpu.XRegister.getWriteableInt()}]               ",
         f"${console.cpu.YRegister.getHex()}  [{console.cpu.YRegister.getWriteableInt()}]               ",
         f"$00{console.cpu.stackPointer.getHex()}" )
-    updateScreenPalettes()
+    #updateScreenPalettes()
     
     if console.ppu.frameComplete: screen.updateScreen(console.screen)
     console.ppu.frameComplete = False

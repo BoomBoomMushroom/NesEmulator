@@ -133,8 +133,9 @@ class PPU:
     def readVRAM(self):
         data = self.ppuDataBuffer
         self.ppuDataBuffer = self.vram[self.address]
+        
+        # Palette gets read instantly
         if self.address >= 0x3f00: data = self.ppuDataBuffer
-        self.address += 1
         return data
     
     def writeRegister(self, register, value, mirrorRegisters: bool = False, fromRAM: bool = False):

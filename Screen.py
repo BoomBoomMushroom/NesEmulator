@@ -157,7 +157,7 @@ class Screen():
         startX = 512 + (150 * patternTableIndex)
         startY = self.fontSize * 9
         
-        patternPixelSize = (8, 8)
+        patternPixelSize = [8] * 2
         patternPixel: pygame.Rect = pygame.Rect(0, 0, patternPixelSize[0], patternPixelSize[1])
 
         palette = [
