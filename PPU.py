@@ -115,17 +115,6 @@ class PPU:
         
         return 0
     
-    def readFromCartridgeCHR(self, address):
-        cartridge: Cartridge = self.console.cartridge
-        return cartridge.CHRMemory[address]
-    
-    # Pattern memory
-    #   0x0000 -> 0x1FFF (8KB)
-    # Name Table
-    #   0x2000 -> 0x2FFF (2KB)
-    # Palettes
-    #   0x3F00 -> 0x3FFF
-    
     def mirrorRegisters(self):
         dataToMirror = self.ram.readSpace(UInt16(0x2000), UInt16(0x2007)) # 8 bytes
         for newAddressStart in range(UInt16(0x2008).value, UInt16(0x3FFF).value, Int8(0x8).value):
@@ -220,6 +209,15 @@ class PPU:
         
         self.scanline = 0
         self.cycle = 0
+        
+        
+        # Pattern memory
+        #   0x0000 -> 0x1FFF (8KB)
+        # Name Table
+        #   0x2000 -> 0x2FFF (2KB)
+        # Palettes
+        #   0x3F00 -> 0x3FFF
+        
         
         # Pattern table 1 = 0x0000 -> 0x0FFF (VRAM)
         # Pattern table 2 = 0x1000 -> 0x1FFF (VRAM)

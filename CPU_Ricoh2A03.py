@@ -1169,7 +1169,7 @@ class Ricoh2A03:
         operand1: UInt8 = self.readByte(self.pc + 0x1)
         operand2: UInt8 = self.readByte(self.pc + 0x2)
         fullAddress: UInt16 = self.combineTwoBytesToOneAddress(operand2, operand1)
-        #valueFromMemory: UInt8 = self.readByte(fullAddress)
+        valueFromMemory: UInt8 = self.readByte(fullAddress)
 
         #self.logInstruction(self.readByte(self.pc).getHex(), "LDA", operand1.getHex(), operand2.getHex(), instructionParameter=f"${fullAddress.getHex()} = {valueFromMemory.getHex()}")
 

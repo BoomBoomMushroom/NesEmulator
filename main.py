@@ -95,12 +95,16 @@ def updateScreen():
     console.ppu.frameComplete = False
     screen.tick()
 
+cpuInstructionLog = open("cpuInstructionLog.txt", "w")
+
 while True:
     if unpausedForOneTick: isPaused = False
     if screen.didQuit: break
     if isPaused:
         updateScreen()
         continue
+    
+    cpuInstructionLog.write(f"{console.cpu.pc.getHex()}\n")
     
     responses = console.step()
     if responses[0] == -1:
@@ -119,6 +123,10 @@ while True:
             owedOneFrameOfUpdate = True
     
     updateScreen()
+
+cpuInstructionLog.close()
+
+with open("cpuOutputLog.txt", "w") as f: f.write(console.cpu.outputLog)
 
 if input("Dump CPU RAM? (y/n) ")=="y":
     print(console.ram.dumpRAM())
