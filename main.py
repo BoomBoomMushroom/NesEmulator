@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from CPU_Ricoh2A03 import Ricoh2A03
 from RAM import RAM
 from PPU import PPU
@@ -59,9 +61,6 @@ console = NES()
 #console.loadROM(romDataBinary)
 console.insertCartridge(nestestCartridge)
 
-screen.drawPatternTable(console.ppu.vram[0x0000:0x1000], 0) # 0x0000 -> 0x0FFF
-screen.drawPatternTable(console.ppu.vram[0x1000:0x2000], 1) # 0x1000 -> 0x1FFF
-
 #console.cpu.disassembleInstructions(0xc004, 0xc2BF)
 
 isPaused = True
@@ -79,6 +78,10 @@ def updateScreenPalettes():
         colors = console.ppu.getPaletteFromIndex(i, True)
         screen.updatePalettes([i], colors)
 
+def reloadPatternTables():
+    screen.drawPatternTable(console.ppu.vram[0x0000:0x1000], 0) # 0x0000 -> 0x0FFF
+    screen.drawPatternTable(console.ppu.vram[0x1000:0x2000], 1) # 0x1000 -> 0x1FFF
+
 def updateScreen():
     global owedOneFrameOfUpdate
     if owedOneFrameOfUpdate == False:
@@ -93,7 +96,6 @@ def updateScreen():
         f"${console.cpu.XRegister.getHex()}  [{console.cpu.XRegister.getWriteableInt()}]               ",
         f"${console.cpu.YRegister.getHex()}  [{console.cpu.YRegister.getWriteableInt()}]               ",
         f"$00{console.cpu.stackPointer.getHex()}" )
-    #updateScreenPalettes()
     
     if console.ppu.frameComplete: screen.updateScreen(console.screen)
     console.ppu.frameComplete = False
@@ -101,6 +103,8 @@ def updateScreen():
 
 cpuInstructionLog = open("cpuInstructionLog.txt", "w")
 writes = 0
+
+reloadPatternTables()
 
 while True:
     if unpausedForOneTick: isPaused = False

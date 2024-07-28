@@ -82,6 +82,15 @@ class Screen():
             self.paletteBoxes.append( self.palettePixel.move(paletteX, paletteY) )
             paletteX += palettePixelSize[1]
         
+        
+        self.activePalette = [
+            (0,0,0),
+            (64,64,64),
+            (127,127,127),
+            (255,255,255),
+        ]
+        self.activePaletteIndex = 0
+        
         self.updatePalettes([0,1,2,3,4,5,6,7])
         
         # set NES Screen to black
@@ -146,6 +155,9 @@ class Screen():
         
         i = 0
         for index in paletteIndexes:
+            if index == self.activePaletteIndex:
+                self.activePalette = paletteColors[i:i+4]
+            
             first = index*4
             self.screen.fill(paletteColors[i], self.paletteBoxes[first])
             self.screen.fill(paletteColors[i+1], self.paletteBoxes[first+1])
@@ -160,12 +172,7 @@ class Screen():
         patternPixelSize = [8] * 2
         patternPixel: pygame.Rect = pygame.Rect(0, 0, patternPixelSize[0], patternPixelSize[1])
 
-        palette = [
-            (0,0,0),
-            (64,64,64),
-            (127,127,127),
-            (255,255,255),
-        ]
+        
         
         for i in range(256): # 265 tiles 16x16 8 pixel tiles
             startAddress = i * 16
@@ -185,7 +192,7 @@ class Screen():
                     
                     newPixel = patternPixel.move(startX + tileX + x,  startY + tileY + y)
                     
-                    color = palette[colorIndex]
+                    color = self.activePalette[colorIndex]
                     self.screen.fill(color, newPixel)
         
     
@@ -202,6 +209,12 @@ class Screen():
                     setattr(sys.modules["__main__"], "isPaused", isPaused==False)
                 if event.key == pygame.K_RIGHTBRACKET:
                     setattr(sys.modules["__main__"], "unpausedForOneTick", True)
+                if event.key == pygame.K_p:
+                    self.activePaletteIndex += 1
+                    self.activePaletteIndex %= 8
+                    sys.modules["__main__"].updateScreenPalettes()
+                    sys.modules["__main__"].reloadPatternTables()
+                    
 
         for queued in self.queuedDraw:
             positionedRect: pygame.Rect = queued[0].get_rect(topleft=queued[1])
