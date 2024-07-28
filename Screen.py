@@ -1,9 +1,11 @@
 from __future__ import annotations
 import os
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
+import PIL.Image
 import pygame
 import sys
 import time
+import PIL
 
 # ripped somewhat from https://github.com/Circuitbreaker08/Party-Gaming/blob/main/main.py
 class Screen():
@@ -152,24 +154,39 @@ class Screen():
             i += 4
     
     def drawPatternTable(self, tableData: bytearray, patternTableIndex: int):
+        startX = 512 + (150 * patternTableIndex)
+        startY = self.fontSize * 9
+        
+        patternPixelSize = (8, 8)
+        patternPixel: pygame.Rect = pygame.Rect(0, 0, patternPixelSize[0], patternPixelSize[1])
+
+        palette = [
+            (0,0,0),
+            (64,64,64),
+            (127,127,127),
+            (255,255,255),
+        ]
+        
         for i in range(256): # 265 tiles 16x16 8 pixel tiles
             startAddress = i * 16
             tile = tableData[startAddress:startAddress+16]
 
-            print(tile, len(tile))
-
-            """
             lowerPlane = tile[:8]
             upperPlane = tile[8:]
+            
+            tileX = (i % 16) * patternPixelSize[0]
+            tileY = (i // 16) * patternPixelSize[1]
+            
             for y in range(8): # Row
                 for x in range(8): # Each pixel in row
                     lowerBit = (lowerPlane[y] >> (7 - x)) & 1
                     upperBit = (upperPlane[y] >> (7 - x)) & 1
                     colorIndex = (upperBit << 1) | lowerBit
-                    print(colorIndex, end="")
-                print("")
-            """
                     
+                    newPixel = patternPixel.move(startX + tileX + x,  startY + tileY + y)
+                    
+                    color = palette[colorIndex]
+                    self.screen.fill(color, newPixel)
         
     
     def tick(self):
