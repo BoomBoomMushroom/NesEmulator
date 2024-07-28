@@ -252,12 +252,12 @@ class Ricoh2A03:
             0x3F: self.IllegalAbsoluteX_RLA,
             
             0x43: self.IllegalIndirectX_SRE,
-            #0x47: self.IllegalZeropageSRE,
-            #0x4F: self.IllegalAbsoluteSRE,
-            #0x53: self.IllegalIndirectY_SRE,
-            #0x57: self.IllegalZeropageX_SRE,
-            #0x5B: self.IllegalAbsoluteY_SRE,
-            #0x5F: self.IllegalAbsoluteX_SRE,
+            0x47: self.IllegalZeropageSRE,
+            0x4F: self.IllegalAbsoluteSRE,
+            0x53: self.IllegalIndirectY_SRE,
+            0x57: self.IllegalZeropageX_SRE,
+            0x5B: self.IllegalAbsoluteY_SRE,
+            0x5F: self.IllegalAbsoluteX_SRE,
             
             
             0xEB: self.IllegalSBC,
@@ -3627,31 +3627,31 @@ class Ricoh2A03:
         self.logInstruction(self.readByte(self.pc).getHex(), "SRE", operand.getHex(), instructionParameter=f"(${operand.getHex()},X) @ {(zeropageAddress).getHex()} = {fullAddress.getHex()} = {memoryBefore.getHex()}", isIllegal=True)
         
         
-        rolResult, carryFlag, negativeFlag, zeroFlag = self.ROL(memoryBefore, self.carryFlag)
-        self.RAM.writeAddress(fullAddress, rolResult.getWriteableInt())       
+        lsrResult, carryFlag, negativeFlag, zeroFlag = self.LSR(memoryBefore)
+        self.RAM.writeAddress(fullAddress, lsrResult.getWriteableInt())
         self.carryFlag = carryFlag
         
-        andResult: Int8 = self.AND_Values(self.accumulatorRegister, rolResult.getWriteableInt())
-        self.accumulatorRegister = andResult
+        eorResult: Int8 = self.EOR(self.accumulatorRegister, lsrResult.getWriteableInt())
+        self.accumulatorRegister = eorResult
         self.updateNegativeFlag(self.accumulatorRegister)
         self.updateZeroFlag(self.accumulatorRegister)
         
         
         self.pc += 0x1
         return 8
-    """
+
     def IllegalZeropageSRE(self):
         operand: UInt8 = self.readByte(self.pc + 0x1)
         operandValue: UInt8 = self.readByte(operand)
         
         self.logInstruction(self.readByte(self.pc).getHex(), "SRE", operand.getHex(), instructionParameter=f"${operand.getHex()} = {operandValue.getHex()}", isIllegal=True)        
         
-        rolResult, carryFlag, negativeFlag, zeroFlag = self.ROL(operandValue, self.carryFlag)
-        self.RAM.writeAddress(operand, rolResult.getWriteableInt())       
+        lsrResult, carryFlag, negativeFlag, zeroFlag = self.LSR(operandValue)
+        self.RAM.writeAddress(operand, lsrResult.getWriteableInt())
         self.carryFlag = carryFlag
         
-        andResult: Int8 = self.AND_Values(self.accumulatorRegister, rolResult.getWriteableInt())
-        self.accumulatorRegister = andResult
+        eorResult: Int8 = self.EOR(self.accumulatorRegister, lsrResult.getWriteableInt())
+        self.accumulatorRegister = eorResult
         self.updateNegativeFlag(self.accumulatorRegister)
         self.updateZeroFlag(self.accumulatorRegister)
         
@@ -3666,12 +3666,12 @@ class Ricoh2A03:
         
         self.logInstruction(self.readByte(self.pc).getHex(), "SRE", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToTest.getHex()}", isIllegal=True)        
         
-        rolResult, carryFlag, negativeFlag, zeroFlag = self.ROL(valueToTest, self.carryFlag)
-        self.RAM.writeAddress(address, rolResult.getWriteableInt())       
+        lsrResult, carryFlag, negativeFlag, zeroFlag = self.LSR(valueToTest)
+        self.RAM.writeAddress(address, lsrResult.getWriteableInt())
         self.carryFlag = carryFlag
         
-        andResult: Int8 = self.AND_Values(self.accumulatorRegister, rolResult.getWriteableInt())
-        self.accumulatorRegister = andResult
+        eorResult: Int8 = self.EOR(self.accumulatorRegister, lsrResult.getWriteableInt())
+        self.accumulatorRegister = eorResult
         self.updateNegativeFlag(self.accumulatorRegister)
         self.updateZeroFlag(self.accumulatorRegister)
         
@@ -3688,12 +3688,12 @@ class Ricoh2A03:
         
         self.logInstruction(self.readByte(self.pc).getHex(), "SRE", operand.getHex(), instructionParameter=f"(${operand.getHex()}),Y = {baseAddress.getHex()} @ {newAddress.getHex()} = {valueToTest.getHex()}", isIllegal=True)        
         
-        rolResult, carryFlag, negativeFlag, zeroFlag = self.ROL(valueToTest, self.carryFlag)
-        self.RAM.writeAddress(newAddress, rolResult.getWriteableInt())       
+        lsrResult, carryFlag, negativeFlag, zeroFlag = self.LSR(valueToTest)
+        self.RAM.writeAddress(newAddress, lsrResult.getWriteableInt())
         self.carryFlag = carryFlag
         
-        andResult: Int8 = self.AND_Values(self.accumulatorRegister, rolResult.getWriteableInt())
-        self.accumulatorRegister = andResult
+        eorResult: Int8 = self.EOR(self.accumulatorRegister, lsrResult.getWriteableInt())
+        self.accumulatorRegister = eorResult
         self.updateNegativeFlag(self.accumulatorRegister)
         self.updateZeroFlag(self.accumulatorRegister)
         
@@ -3707,19 +3707,19 @@ class Ricoh2A03:
         
         self.logInstruction(self.readByte(self.pc).getHex(), "SRE", operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {value.getHex()}", isIllegal=True)
         
-        rolResult, carryFlag, negativeFlag, zeroFlag = self.ROL(value, self.carryFlag)
-        self.RAM.writeAddress(zeropageAddress, rolResult.getWriteableInt())       
+        lsrResult, carryFlag, negativeFlag, zeroFlag = self.LSR(value)
+        self.RAM.writeAddress(zeropageAddress, lsrResult.getWriteableInt())
         self.carryFlag = carryFlag
         
-        andResult: Int8 = self.AND_Values(self.accumulatorRegister, rolResult.getWriteableInt())
-        self.accumulatorRegister = andResult
+        eorResult: Int8 = self.EOR(self.accumulatorRegister, lsrResult.getWriteableInt())
+        self.accumulatorRegister = eorResult
         self.updateNegativeFlag(self.accumulatorRegister)
         self.updateZeroFlag(self.accumulatorRegister)
         
         self.pc += 0x1
         return 6
     
-    def IllegalAbsoluteY_RLA(self):
+    def IllegalAbsoluteY_SRE(self):
         operand1: UInt8 = self.readByte(self.pc + 0x1)
         operand2: UInt8 = self.readByte(self.pc + 0x2)
         fullAddress: UInt16 = self.combineTwoBytesToOneAddress(operand2, operand1)
@@ -3728,12 +3728,12 @@ class Ricoh2A03:
         
         self.logInstruction(self.readByte(self.pc).getHex(), "SRE", operand1.getHex(), operand2=operand2.getHex(), instructionParameter=f"${fullAddress.getHex()},Y @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}", isIllegal=True)        
         
-        rolResult, carryFlag, negativeFlag, zeroFlag = self.ROL(valueFromMemory, self.carryFlag)
-        self.RAM.writeAddress(effectiveAddress, rolResult.getWriteableInt())       
+        lsrResult, carryFlag, negativeFlag, zeroFlag = self.LSR(valueFromMemory)
+        self.RAM.writeAddress(effectiveAddress, lsrResult.getWriteableInt())
         self.carryFlag = carryFlag
         
-        andResult: Int8 = self.AND_Values(self.accumulatorRegister, rolResult.getWriteableInt())
-        self.accumulatorRegister = andResult
+        eorResult: Int8 = self.EOR(self.accumulatorRegister, lsrResult.getWriteableInt())
+        self.accumulatorRegister = eorResult
         self.updateNegativeFlag(self.accumulatorRegister)
         self.updateZeroFlag(self.accumulatorRegister)
         
@@ -3749,18 +3749,17 @@ class Ricoh2A03:
         
         self.logInstruction(self.readByte(self.pc).getHex(), "SRE", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}", isIllegal=True)        
         
-        rolResult, carryFlag, negativeFlag, zeroFlag = self.ROL(valueFromMemory, self.carryFlag)
-        self.RAM.writeAddress(effectiveAddress, rolResult.getWriteableInt())       
+        lsrResult, carryFlag, negativeFlag, zeroFlag = self.LSR(valueFromMemory)
+        self.RAM.writeAddress(effectiveAddress, lsrResult.getWriteableInt())
         self.carryFlag = carryFlag
         
-        andResult: Int8 = self.AND_Values(self.accumulatorRegister, rolResult.getWriteableInt())
-        self.accumulatorRegister = andResult
+        eorResult: Int8 = self.EOR(self.accumulatorRegister, lsrResult.getWriteableInt())
+        self.accumulatorRegister = eorResult
         self.updateNegativeFlag(self.accumulatorRegister)
         self.updateZeroFlag(self.accumulatorRegister)
         
         self.pc += 0x2
         return 7
-    """
     
     
     def empty(self): return 0
