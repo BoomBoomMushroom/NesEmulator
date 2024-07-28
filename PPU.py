@@ -126,80 +126,6 @@ class PPU:
     # Palettes
     #   0x3F00 -> 0x3FFF
     
-    def PPU_Read(self, address: int):
-        if type(address) != int: address = address.value
-        data: int = 0x00
-
-        #print(hex(address))
-
-        if address >= 0x0000 and address <= 0x1FFF:
-            data = self.readFromCartridgeCHR(address)
-        elif address >= 0x2000 and address <= 0x2FFF:
-            pass
-        elif address >= 0x3F00 and address <= 0x3FFF:
-            data = self.readFromCartridgeCHR(address)
-            #data = self.paletteTable[address]
-        
-        #print(hex(address))
-        
-        return data
-    
-    def PPU_Write(self, address: int, data: int):
-        if type(address) != int: address = address.value
-        data: UInt8 = 0x00
-        
-        if address >= 0x0000 and address <= 0x1FFF:
-            self.patternTable[(address & 0x1000) >> 12][address & 0x0FFF] = data
-        elif address >= 0x2000 and address <= 0x2FFF:
-            pass
-        elif address >= 0x3F00 and address <= 0x3FFF:
-            address &= 0x001F
-            if address == 0x0010: address = 0x0000
-            if address == 0x0014: address = 0x0004
-            if address == 0x0018: address = 0x0008
-            if address == 0x001C: address = 0x000C
-            self.paletteTable[address] = data
-        
-        return data
-    
-    
-    
-    def getPatternTable(self, tableIndex: int, palette: int):
-        for tileY in range(16):
-            for tileX in range(16):
-                offset = tileY * 256 + tileX * 16
-                for row in range(8):
-                    tileLSB = self.PPU_Read(tableIndex * 0x1000 + offset + row + 0)
-                    tileMSB = self.PPU_Read(tableIndex * 0x1000 + offset + row + 8)
-                    
-                    for col in range(8):
-                        pixel = (tileLSB & 0x01) + (tileMSB & 0x01)
-                        tileLSB >>= 1
-                        tileMSB >>= 1
-                        
-                        #print(pixel, hex(pixel))
-                        patternX = tileX * 8 + (7 - col)
-                        patternY = tileY * 8 + row
-                        pixelColor = self.getColorFromPaletteRam(palette, pixel)
-                        
-                        self.patternTable[tableIndex][patternX][patternY] = pixelColor
-        
-       # self.patternTableToString(tableIndex)
-        
-        return self.patternTable[tableIndex]
-    
-    def getColorFromPaletteRam(self, palette: int, pixel: int):
-        return self.PPU_Read(0x3F00 + (palette << 2) + pixel)
-    
-    
-    def patternTableToString(self, tableIndex):
-        table = self.patternTable[tableIndex]
-        with open("patternTable.txt", "w") as f:
-            for row in table:
-                for pixel in row:
-                    f.write(str(pixel))
-                f.write("\n")
-    
     def mirrorRegisters(self):
         dataToMirror = self.ram.readSpace(UInt16(0x2000), UInt16(0x2007)) # 8 bytes
         for newAddressStart in range(UInt16(0x2008).value, UInt16(0x3FFF).value, Int8(0x8).value):
@@ -215,7 +141,7 @@ class PPU:
         self.writeToggle = 0
         return value
     
-    def writeRegister(self, register, value, mirrorRegisters: bool = False):
+    def writeRegister(self, register, value, mirrorRegisters: bool = False, fromRAM: bool = False):
         if register == 0x2000:
             self.ctrl = value
         elif register == 0x2001:
@@ -245,13 +171,33 @@ class PPU:
         elif register == 0x2007:
             self.vram[self.address] = value
             self.address += 1
+            self.vramUpdate()
             return
         else:
             raise ValueError # Register not found
         
         # Write to address in the RAM
-        self.ram.writeAddress(UInt16(register), value)
+        if fromRAM == False: self.ram.writeAddress(UInt16(register), value)
         if mirrorRegisters: self.mirrorRegisters()
+    
+    def vramUpdate(self):
+        updatedAddress = self.address - 1
+        # Pattern table 1 = 0x0000 -> 0x0FFF (VRAM)
+        # Pattern table 2 = 0x1000 -> 0x1FFF (VRAM)
+        
+        # Name Table 1 = 0x2000 -> 0x23FF (VRAM)
+        # Name Table 2 = 0x2400 -> 0x27FF (VRAM)
+        # Name Table 3 = 0x2800 -> 0x2BFF (VRAM)
+        # Name Table 4 = 0x2C00 -> 0x2FFF (VRAM)
+        
+        # Palette Table = 0x3F00 -> 0x3FFF (VRAM)
+        
+        if updatedAddress >= 0x3F00 and updatedAddress <= 0x3FFF:
+            # inside of pattern table 1
+            print(updatedAddress, hex(updatedAddress), self.vram[updatedAddress])
+        
+    def getPaletteFromIndex(self, paletteIndex):
+        pass
     
     def updateStatusRegister(self):
         binary = f"0b{self.vblank}{self.spriteZeroHit}{self.spriteOverflow}00000"

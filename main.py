@@ -57,6 +57,8 @@ console = NES()
 #console.loadROM(romDataBinary)
 console.insertCartridge(nestestCartridge)
 
+#console.cpu.disassembleInstructions(0xc004, 0xc0FF)
+
 isPaused = True
 unpausedForOneTick = False
 owedOneFrameOfUpdate = False

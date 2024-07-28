@@ -67,6 +67,21 @@ class Screen():
         self.screen = pygame.display.set_mode((1024, 512))
         self.screen.fill(self.backgroundColor)
         
+        # Palette Boxes
+        palettePixelSize = (14, 14)
+        self.palettePixel: pygame.Rect = pygame.Rect(0, 0, palettePixelSize[0], palettePixelSize[1])
+        self.paletteBoxes = []
+        
+        paletteY = self.fontSize * 8
+        paletteX = 512 - (palettePixelSize[0]/2)
+        for i in range(0, (8+1) * 4):
+            if i % 4 == 0: paletteX += palettePixelSize[0]/2
+            
+            self.paletteBoxes.append( self.palettePixel.move(paletteX, paletteY) )
+            paletteX += palettePixelSize[1]
+        
+        self.updatePalettes([0,1,2,3,4,5,6,7])
+        
         # set NES Screen to black
         #pygame.draw.rect(self.screen, (0,0,0), pygame.Rect(0,0, 512, 512))
         
@@ -122,6 +137,14 @@ class Screen():
                 self.screen.set_at((x,y), pixelColor)
         
         self.lastFrame = time.time_ns()
+    
+    def updatePalettes(self, paletteIndexes: list[int] = [], paletteColors: list[tuple[int,int,int]] = []):
+        for paletteIndex in paletteIndexes:
+            first = paletteIndex*4
+            self.screen.fill((127, 127, 127), self.paletteBoxes[first])
+            self.screen.fill((127, 127, 127), self.paletteBoxes[first+1])
+            self.screen.fill((127, 127, 127), self.paletteBoxes[first+2])
+            self.screen.fill((127, 127, 127), self.paletteBoxes[first+3])
     
     def tick(self):
         keys = pygame.key.get_pressed()

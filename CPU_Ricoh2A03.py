@@ -12,6 +12,8 @@
 from BitwiseInts import Int8, UInt8, UInt16
 from RAM import RAM
 
+import inspect
+
 class Ricoh2A03:
     def __init__(self, console) -> None:
         
@@ -343,7 +345,6 @@ class Ricoh2A03:
         self.outputLog += message + "\n"
     
     def logInstruction(self, opcode: str, instructionName: str, operand1: str = "  ", operand2: str = "  ", instructionParameter: str = "    ", isIllegal=False):
-        return
         startRegistersLen = 48
         
         isIllegalChar = "*" if isIllegal else " "
@@ -353,6 +354,37 @@ class Ricoh2A03:
         
         self.addToOutputLog(pt1 + self.registerStatesString())
     
+    
+    def disassembleInstructions(self, startAddress: int = 0, endAddress: int = 0):
+        if type(startAddress) != int: startAddress = startAddress.value
+        if type(endAddress) != int: endAddress = endAddress.value
+        
+        while startAddress < endAddress:
+            address: UInt16 = UInt16(startAddress)
+            opcode = self.readByte(address)
+            try:
+                opcodeHex = opcode.getHex()
+                func = self.opcodes[opcode.getWriteableInt()]
+                
+                
+                src = inspect.getsource(func)
+                bytesReadOntopOfPC = 0
+                operands = ""
+                
+                if "self.pc += " in src:
+                    hexAdd = src.split("self.pc += ")[1].split("\n")[0].strip()
+                    bytesReadOntopOfPC = int(hexAdd,16)
+
+                    for i in range(bytesReadOntopOfPC+1):
+                        operand = self.readByte(address + i)
+                        operands += f" {operand.getHex()}"
+
+                startAddress += bytesReadOntopOfPC
+                print(f"${address.getHex()}: ({opcodeHex}) {func.__name__}{operands}")
+            except:
+                pass
+
+            startAddress += 1
     
     def updateNegativeFlag(self, value: Int8, getResult = False) -> None:
         newValue: bool = (value.value & 0x80) != 0
@@ -3175,5 +3207,5 @@ class Ricoh2A03:
         
         if instruction in self.opcodes: return self.opcodes[instruction]
         else:
-            print(f"Opcode unknown! byte: {instruction}; hex: {hex(instruction)}; program counter: {self.pc.getHex()}")
+            if self.doPrint: print(f"Opcode unknown! byte: {instruction}; hex: {hex(instruction)}; program counter: {self.pc.getHex()}")
             return -1
