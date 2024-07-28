@@ -259,6 +259,14 @@ class Ricoh2A03:
             0x5B: self.IllegalAbsoluteY_SRE,
             0x5F: self.IllegalAbsoluteX_SRE,
             
+            0x63: self.IllegalIndirectX_RRA,
+            0x67: self.IllegalZeropageRRA,
+            0x6F: self.IllegalAbsoluteRRA,
+            0x73: self.IllegalIndirectY_RRA,
+            0x77: self.IllegalZeropageX_RRA,
+            0x7B: self.IllegalAbsoluteY_RRA,
+            0x7F: self.IllegalAbsoluteX_RRA,
+            
             
             0xEB: self.IllegalSBC,
             0x1A: self.IllegalNOP_OneByte,
@@ -614,16 +622,15 @@ class Ricoh2A03:
         resultInt8: UInt8 = UInt8(result)
         
         if ((accumulatorVal ^ operandVal) & 0x80) == 0 and ((accumulatorVal ^ result) & 0x80) != 0:
-            self.overflowFlag = True
+            overflowFlag = True
         else:
-            self.overflowFlag = False
+            overflowFlag = False
         
-        carryFlag = result > 0xff
+        carryFlag = result > 0xFF
         negativeFlag = (result >> 7 & 1) == 1
         zeroFlag = resultInt8.value == 0
         
-        self.accumulatorRegister = resultInt8
-        return resultInt8, carryFlag, negativeFlag, zeroFlag
+        return resultInt8, carryFlag, negativeFlag, zeroFlag, overflowFlag
     
     def SBC(self, A: UInt8, B: UInt8, carryFlag: bool = False):
         # ChatGPT I would die for you!
@@ -670,15 +677,14 @@ class Ricoh2A03:
     
     def ROR(self, A: UInt8, carryFlag: bool = False):
         carry: int = 1 if carryFlag else 0
-        newCarry: bool = bool(A & 0x01) # new carry is lsb of accumulator
+        newCarry: bool = A.getWriteableInt() & 0x01 == 1 # new carry is lsb of accumulator
         
         newAccumulator: int = (A.getWriteableInt() >> 1) | (carry << 7)
         A = Int8(newAccumulator)
         
-        carryFlag = newCarry == 1
         negativeFlag = self.updateNegativeFlag(A, True)
         zeroFlag = self.updateZeroFlag(A, True)
-        return A, carryFlag, negativeFlag, zeroFlag
+        return A, newCarry, negativeFlag, zeroFlag
     
     def ROL(self, A: UInt8, carryFlag: bool = False):
         carry: int = 1 if carryFlag else 0
@@ -1044,11 +1050,12 @@ class Ricoh2A03:
         
         self.logInstruction(self.readByte(self.pc).getHex(), "ADC", operand.getHex(), instructionParameter=f"#${operand.getHex()}")
         
-        resultInt8, carryFlag, negativeFlag, zeroFlag = self.ADC(self.accumulatorRegister, operand, self.carryFlag)
+        resultInt8, carryFlag, negativeFlag, zeroFlag, overflowFlag = self.ADC(self.accumulatorRegister, operand, self.carryFlag)
 
         self.carryFlag = carryFlag
         self.negativeFlag = negativeFlag
         self.zeroFlag = zeroFlag
+        self.overflowFlag = overflowFlag
         
         self.accumulatorRegister = resultInt8
         
@@ -1422,11 +1429,12 @@ class Ricoh2A03:
         
         self.logInstruction(self.readByte(self.pc).getHex(), "ADC", operand.getHex(), instructionParameter=f"(${operand.getHex()},X) @ {(zeropageAddress).getHex()} = {fullAddress.getHex()} = {memoryBefore.getHex()}")        
         
-        resultInt8, carryFlag, negativeFlag, zeroFlag = self.ADC(self.accumulatorRegister, memoryBefore, self.carryFlag)
+        resultInt8, carryFlag, negativeFlag, zeroFlag, overflowFlag = self.ADC(self.accumulatorRegister, memoryBefore, self.carryFlag)
 
         self.carryFlag = carryFlag
         self.negativeFlag = negativeFlag
         self.zeroFlag = zeroFlag
+        self.overflowFlag = overflowFlag
         
         self.accumulatorRegister = resultInt8
         
@@ -1559,11 +1567,12 @@ class Ricoh2A03:
         
         self.logInstruction(self.readByte(self.pc).getHex(), "ADC", operand.getHex(), instructionParameter=f"${operand.getHex()} = {value.getHex()}")
         
-        resultInt8, carryFlag, negativeFlag, zeroFlag = self.ADC(self.accumulatorRegister, value, self.carryFlag)
+        resultInt8, carryFlag, negativeFlag, zeroFlag, overflowFlag = self.ADC(self.accumulatorRegister, value, self.carryFlag)
 
         self.carryFlag = carryFlag
         self.negativeFlag = negativeFlag
         self.zeroFlag = zeroFlag
+        self.overflowFlag = overflowFlag
         
         self.accumulatorRegister = resultInt8
         
@@ -1823,11 +1832,12 @@ class Ricoh2A03:
         
         self.logInstruction(self.readByte(self.pc).getHex(), "ADC", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToTest.getHex()}")        
         
-        resultInt8, carryFlag, negativeFlag, zeroFlag = self.ADC(self.accumulatorRegister, valueToTest, self.carryFlag)
+        resultInt8, carryFlag, negativeFlag, zeroFlag, overflowFlag = self.ADC(self.accumulatorRegister, valueToTest, self.carryFlag)
 
         self.carryFlag = carryFlag
         self.negativeFlag = negativeFlag
         self.zeroFlag = zeroFlag
+        self.overflowFlag = overflowFlag
         
         self.accumulatorRegister = resultInt8
         
@@ -2089,11 +2099,12 @@ class Ricoh2A03:
         
         self.logInstruction(self.readByte(self.pc).getHex(), "ADC", operand.getHex(), instructionParameter=f"(${operand.getHex()}),Y = {baseAddress.getHex()} @ {newAddress.getHex()} = {valueToTest.getHex()}")        
         
-        resultInt8, carryFlag, negativeFlag, zeroFlag = self.ADC(self.accumulatorRegister, valueToTest, self.carryFlag)
+        resultInt8, carryFlag, negativeFlag, zeroFlag, overflowFlag = self.ADC(self.accumulatorRegister, valueToTest, self.carryFlag)
 
         self.carryFlag = carryFlag
         self.negativeFlag = negativeFlag
         self.zeroFlag = zeroFlag
+        self.overflowFlag = overflowFlag
         
         self.accumulatorRegister = resultInt8
         
@@ -2253,11 +2264,12 @@ class Ricoh2A03:
         
         self.logInstruction(self.readByte(self.pc).getHex(), "ADC", operand1.getHex(), operand2.getHex(), instructionParameter=f"${fullAddress.getHex()},Y @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")        
         
-        resultInt8, carryFlag, negativeFlag, zeroFlag = self.ADC(self.accumulatorRegister, valueFromMemory, self.carryFlag)
+        resultInt8, carryFlag, negativeFlag, zeroFlag, overflowFlag = self.ADC(self.accumulatorRegister, valueFromMemory, self.carryFlag)
 
         self.carryFlag = carryFlag
         self.negativeFlag = negativeFlag
         self.zeroFlag = zeroFlag
+        self.overflowFlag = overflowFlag
         
         self.accumulatorRegister = resultInt8
         
@@ -2397,11 +2409,12 @@ class Ricoh2A03:
         
         self.logInstruction(self.readByte(self.pc).getHex(), "ADC", operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {value.getHex()}")        
         
-        resultInt8, carryFlag, negativeFlag, zeroFlag = self.ADC(self.accumulatorRegister, value, self.carryFlag)
+        resultInt8, carryFlag, negativeFlag, zeroFlag, overflowFlag = self.ADC(self.accumulatorRegister, value, self.carryFlag)
 
         self.carryFlag = carryFlag
         self.negativeFlag = negativeFlag
         self.zeroFlag = zeroFlag
+        self.overflowFlag = overflowFlag
         
         self.accumulatorRegister = resultInt8
         
@@ -2666,11 +2679,12 @@ class Ricoh2A03:
         
         self.logInstruction(self.readByte(self.pc).getHex(), "ADC", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}")        
         
-        resultInt8, carryFlag, negativeFlag, zeroFlag = self.ADC(self.accumulatorRegister, valueFromMemory, self.carryFlag)
+        resultInt8, carryFlag, negativeFlag, zeroFlag, overflowFlag = self.ADC(self.accumulatorRegister, valueFromMemory, self.carryFlag)
 
         self.carryFlag = carryFlag
         self.negativeFlag = negativeFlag
         self.zeroFlag = zeroFlag
+        self.overflowFlag = overflowFlag
         
         self.accumulatorRegister = resultInt8
         
@@ -3760,6 +3774,175 @@ class Ricoh2A03:
         
         self.pc += 0x2
         return 7
+    
+    
+    
+    def IllegalIndirectX_RRA(self):
+        operand: UInt8 = self.readByte(self.pc + 0x1)
+        zeropageAddress: UInt8 = operand + self.XRegister
+        lowAddressByte: UInt8 = self.readByte(zeropageAddress)
+        highAddressByte: UInt8 = self.readByte(zeropageAddress + 0x1)
+        fullAddress: UInt16 = self.combineTwoBytesToOneAddress(highAddressByte, lowAddressByte)
+        memoryBefore: UInt8 = self.readByte(fullAddress)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "RRA", operand.getHex(), instructionParameter=f"(${operand.getHex()},X) @ {(zeropageAddress).getHex()} = {fullAddress.getHex()} = {memoryBefore.getHex()}", isIllegal=True)
+        
+        
+        rorResult, carryFlag, negativeFlag, zeroFlag = self.ROR(memoryBefore, self.carryFlag)
+        rorResult: UInt8 = UInt8(rorResult.value)
+        self.RAM.writeAddress(fullAddress, rorResult.getWriteableInt())
+        self.carryFlag = carryFlag
+        
+        resultInt8, carryFlag, negativeFlag, zeroFlag, overflowFlag = self.ADC(self.accumulatorRegister, rorResult, self.carryFlag)
+        self.accumulatorRegister = resultInt8
+        self.carryFlag = carryFlag
+        self.negativeFlag = negativeFlag
+        self.zeroFlag = zeroFlag
+        self.overflowFlag = overflowFlag
+        
+        
+        self.pc += 0x1
+        return 8
+
+    def IllegalZeropageRRA(self):
+        operand: UInt8 = self.readByte(self.pc + 0x1)
+        operandValue: UInt8 = self.readByte(operand)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "RRA", operand.getHex(), instructionParameter=f"${operand.getHex()} = {operandValue.getHex()}", isIllegal=True)        
+        
+        rorResult, carryFlag, negativeFlag, zeroFlag = self.ROR(operandValue, self.carryFlag)
+        rorResult: UInt8 = UInt8(rorResult.value)
+        self.RAM.writeAddress(operand, rorResult.getWriteableInt())
+        self.carryFlag = carryFlag
+        
+        resultInt8, carryFlag, negativeFlag, zeroFlag, overflowFlag = self.ADC(self.accumulatorRegister, rorResult, self.carryFlag)
+        self.accumulatorRegister = resultInt8
+        self.carryFlag = carryFlag
+        self.negativeFlag = negativeFlag
+        self.zeroFlag = zeroFlag
+        self.overflowFlag = overflowFlag
+        
+        self.pc += 0x1
+        return 5
+    
+    def IllegalAbsoluteRRA(self):
+        PCL: UInt8 = self.readByte(self.pc + 0x1)
+        PCH: UInt8 = self.readByte(self.pc + 0x2)
+        address: UInt16 = self.combineTwoBytesToOneAddress(PCH, PCL)
+        valueToTest: UInt8 = self.readByte(address)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "RRA", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToTest.getHex()}", isIllegal=True)        
+        
+        rorResult, carryFlag, negativeFlag, zeroFlag = self.ROR(valueToTest, self.carryFlag)
+        rorResult: UInt8 = UInt8(rorResult.value)
+        self.RAM.writeAddress(address, rorResult.getWriteableInt())
+        self.carryFlag = carryFlag
+        
+        resultInt8, carryFlag, negativeFlag, zeroFlag, overflowFlag = self.ADC(self.accumulatorRegister, rorResult, self.carryFlag)
+        self.accumulatorRegister = resultInt8
+        self.carryFlag = carryFlag
+        self.negativeFlag = negativeFlag
+        self.zeroFlag = zeroFlag
+        self.overflowFlag = overflowFlag
+        
+        self.pc += 0x2
+        return 6
+    
+    def IllegalIndirectY_RRA(self):
+        operand: UInt8 = self.readByte(self.pc + 0x1)
+        baseAddressLow: UInt8 = self.readByte(operand)
+        baseAddressHigh: UInt8 = self.readByte(operand + 0x1)
+        baseAddress: UInt16 = self.combineTwoBytesToOneAddress(baseAddressHigh, baseAddressLow)
+        newAddress: UInt8 = baseAddress + self.YRegister.getWriteableInt()
+        valueToTest: UInt8 = self.readByte(newAddress)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "RRA", operand.getHex(), instructionParameter=f"(${operand.getHex()}),Y = {baseAddress.getHex()} @ {newAddress.getHex()} = {valueToTest.getHex()}", isIllegal=True)        
+        
+        rorResult, carryFlag, negativeFlag, zeroFlag = self.ROR(valueToTest ,self.carryFlag)
+        rorResult: UInt8 = UInt8(rorResult.value)
+        self.RAM.writeAddress(newAddress, rorResult.getWriteableInt())
+        self.carryFlag = carryFlag
+        
+        resultInt8, carryFlag, negativeFlag, zeroFlag, overflowFlag = self.ADC(self.accumulatorRegister, rorResult, self.carryFlag)
+        self.accumulatorRegister = resultInt8
+        self.carryFlag = carryFlag
+        self.negativeFlag = negativeFlag
+        self.zeroFlag = zeroFlag
+        self.overflowFlag = overflowFlag
+        
+        self.pc += 0x1
+        return 8
+    
+    def IllegalZeropageX_RRA(self):
+        operand: UInt8 = self.readByte(self.pc + 0x1)
+        zeropageAddress: UInt8 = operand + self.XRegister.value 
+        value: UInt8 = self.readByte(zeropageAddress)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "RRA", operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {value.getHex()}", isIllegal=True)
+        
+        rorResult, carryFlag, negativeFlag, zeroFlag = self.ROR(value ,self.carryFlag)
+        rorResult: UInt8 = UInt8(rorResult.value)
+        self.RAM.writeAddress(zeropageAddress, rorResult.getWriteableInt())
+        self.carryFlag = carryFlag
+        
+        resultInt8, carryFlag, negativeFlag, zeroFlag, overflowFlag = self.ADC(self.accumulatorRegister, rorResult, self.carryFlag)
+        self.accumulatorRegister = resultInt8
+        self.carryFlag = carryFlag
+        self.negativeFlag = negativeFlag
+        self.zeroFlag = zeroFlag
+        self.overflowFlag = overflowFlag
+        
+        self.pc += 0x1
+        return 6
+    
+    def IllegalAbsoluteY_RRA(self):
+        operand1: UInt8 = self.readByte(self.pc + 0x1)
+        operand2: UInt8 = self.readByte(self.pc + 0x2)
+        fullAddress: UInt16 = self.combineTwoBytesToOneAddress(operand2, operand1)
+        effectiveAddress: UInt16 = fullAddress + self.YRegister.getWriteableInt()
+        valueFromMemory: UInt8 = self.readByte(effectiveAddress)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "RRA", operand1.getHex(), operand2=operand2.getHex(), instructionParameter=f"${fullAddress.getHex()},Y @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}", isIllegal=True)        
+        
+        rorResult, carryFlag, negativeFlag, zeroFlag = self.ROR(valueFromMemory ,self.carryFlag)
+        rorResult: UInt8 = UInt8(rorResult.value)
+        self.RAM.writeAddress(effectiveAddress, rorResult.getWriteableInt())
+        self.carryFlag = carryFlag
+        
+        resultInt8, carryFlag, negativeFlag, zeroFlag, overflowFlag = self.ADC(self.accumulatorRegister, rorResult, self.carryFlag)
+        self.accumulatorRegister = resultInt8
+        self.carryFlag = carryFlag
+        self.negativeFlag = negativeFlag
+        self.zeroFlag = zeroFlag
+        self.overflowFlag = overflowFlag
+        
+        self.pc += 0x2
+        return 7
+    
+    def IllegalAbsoluteX_RRA(self):
+        operand1: UInt8 = self.readByte(self.pc + 0x1)
+        operand2: UInt8 = self.readByte(self.pc + 0x2)
+        fullAddress: UInt16 = self.combineTwoBytesToOneAddress(operand2, operand1)
+        effectiveAddress: UInt16 = fullAddress + self.XRegister.getWriteableInt()
+        valueFromMemory: UInt8 = self.readByte(effectiveAddress)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "RRA", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}", isIllegal=True)        
+        
+        rorResult, carryFlag, negativeFlag, zeroFlag = self.ROR(valueFromMemory ,self.carryFlag)
+        rorResult: UInt8 = UInt8(rorResult.value)
+        self.RAM.writeAddress(effectiveAddress, rorResult.getWriteableInt())
+        self.carryFlag = carryFlag
+        
+        resultInt8, carryFlag, negativeFlag, zeroFlag, overflowFlag = self.ADC(self.accumulatorRegister, rorResult, self.carryFlag)
+        self.accumulatorRegister = resultInt8
+        self.carryFlag = carryFlag
+        self.negativeFlag = negativeFlag
+        self.zeroFlag = zeroFlag
+        self.overflowFlag = overflowFlag
+        
+        self.pc += 0x2
+        return 7
+    
     
     
     def empty(self): return 0
