@@ -220,7 +220,45 @@ class Ricoh2A03:
             0x97: self.IllegalZeropageY_SAX,
             
             0xC3: self.IllegalIndirectX_DCP,
-            0xC7: self.IllegalZeropage_DCP,
+            0xC7: self.IllegalZeropageDCP,
+            0xCF: self.IllegalAbsoluteDCP,
+            0xD3: self.IllegalIndirectY_DCP,
+            0xD7: self.IllegalZeropageX_DCP,
+            0xDB: self.IllegalAbsoluteY_DCP,
+            0xDF: self.IllegalAbsoluteX_DCP,
+            
+            0xE3: self.IllegalIndirectX_ISB,
+            0xE7: self.IllegalZeropageISB,
+            0xEF: self.IllegalAbsoluteISB,
+            0xF3: self.IllegalIndirectY_ISB,
+            0xF7: self.IllegalZeropageX_ISB,
+            0xFB: self.IllegalAbsoluteY_ISB,
+            0xFF: self.IllegalAbsoluteX_ISB,
+            
+            0x03: self.IllegalIndirectX_SLO,
+            0x07: self.IllegalZeropageSLO,
+            0x0F: self.IllegalAbsoluteSLO,
+            0x13: self.IllegalIndirectY_SLO,
+            0x17: self.IllegalZeropageX_SLO,
+            0x1B: self.IllegalAbsoluteY_SLO,
+            0x1F: self.IllegalAbsoluteX_SLO,
+            
+            0x23: self.IllegalIndirectX_RLA,
+            0x27: self.IllegalZeropageRLA,
+            0x2F: self.IllegalAbsoluteRLA,
+            0x33: self.IllegalIndirectY_RLA,
+            0x37: self.IllegalZeropageX_RLA,
+            0x3B: self.IllegalAbsoluteY_RLA,
+            0x3F: self.IllegalAbsoluteX_RLA,
+            
+            0x43: self.IllegalIndirectX_SRE,
+            #0x47: self.IllegalZeropageSRE,
+            #0x4F: self.IllegalAbsoluteSRE,
+            #0x53: self.IllegalIndirectY_SRE,
+            #0x57: self.IllegalZeropageX_SRE,
+            #0x5B: self.IllegalAbsoluteY_SRE,
+            #0x5F: self.IllegalAbsoluteX_SRE,
+            
             
             0xEB: self.IllegalSBC,
             0x1A: self.IllegalNOP_OneByte,
@@ -623,7 +661,7 @@ class Ricoh2A03:
         return A, carryFlag, negativeFlag, zeroFlag
     
     def ASL(self, A: UInt8):
-        carryFlag = bin(self.accumulatorRegister.value).split("0b")[1].zfill(8)[0] == "1"
+        carryFlag = ((A.getWriteableInt() >> 7) & 1) == 1
         A <<= 1
         
         negativeFlag = self.updateNegativeFlag(A, True)
@@ -3014,7 +3052,7 @@ class Ricoh2A03:
         self.pc += 0x1
         return 8
     
-    def IllegalZeropage_DCP(self):
+    def IllegalZeropageDCP(self):
         operand: UInt8 = self.readByte(self.pc + 0x1)
         operandValue: UInt8 = self.readByte(operand)
         
@@ -3031,6 +3069,698 @@ class Ricoh2A03:
         self.pc += 0x1
         return 5
     
+    def IllegalAbsoluteDCP(self):
+        PCL: UInt8 = self.readByte(self.pc + 0x1)
+        PCH: UInt8 = self.readByte(self.pc + 0x2)
+        address: UInt16 = self.combineTwoBytesToOneAddress(PCH, PCL)
+        valueToTest: UInt8 = self.readByte(address)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "DCP", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToTest.getHex()}", isIllegal=True)        
+        
+        valueToTest -= 1
+        self.RAM.writeAddress(address, valueToTest.getWriteableInt())
+        
+        compareResult, negativeFlag, zeroFlag, carryFlag = self.compareValues(self.accumulatorRegister, valueToTest)
+        self.negativeFlag = negativeFlag
+        self.zeroFlag = zeroFlag
+        self.carryFlag = carryFlag
+        
+        self.pc += 0x2
+        return 6
+    
+    def IllegalIndirectY_DCP(self):
+        operand: UInt8 = self.readByte(self.pc + 0x1)
+        baseAddressLow: UInt8 = self.readByte(operand)
+        baseAddressHigh: UInt8 = self.readByte(operand + 0x1)
+        baseAddress: UInt16 = self.combineTwoBytesToOneAddress(baseAddressHigh, baseAddressLow)
+        newAddress: UInt8 = baseAddress + self.YRegister.getWriteableInt()
+        valueToTest: UInt8 = self.readByte(newAddress)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "DCP", operand.getHex(), instructionParameter=f"(${operand.getHex()}),Y = {baseAddress.getHex()} @ {newAddress.getHex()} = {valueToTest.getHex()}", isIllegal=True)        
+        
+        valueToTest -= 1
+        self.RAM.writeAddress(newAddress, valueToTest.getWriteableInt())
+        
+        compareResult, negativeFlag, zeroFlag, carryFlag = self.compareValues(self.accumulatorRegister, valueToTest)
+        self.negativeFlag = negativeFlag
+        self.zeroFlag = zeroFlag
+        self.carryFlag = carryFlag
+        
+        self.pc += 0x1
+        return 8
+    
+    def IllegalZeropageX_DCP(self):
+        operand: UInt8 = self.readByte(self.pc + 0x1)
+        zeropageAddress: UInt8 = operand + self.XRegister.value 
+        value: UInt8 = self.readByte(zeropageAddress)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "DCP", operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {value.getHex()}", isIllegal=True)
+        
+        value -= 1
+        self.RAM.writeAddress(zeropageAddress, value.getWriteableInt())
+        
+        compareResult, negativeFlag, zeroFlag, carryFlag = self.compareValues(self.accumulatorRegister, value)
+        self.negativeFlag = negativeFlag
+        self.zeroFlag = zeroFlag
+        self.carryFlag = carryFlag
+        
+        self.pc += 0x1
+        return 6
+    
+    def IllegalAbsoluteY_DCP(self):
+        operand1: UInt8 = self.readByte(self.pc + 0x1)
+        operand2: UInt8 = self.readByte(self.pc + 0x2)
+        fullAddress: UInt16 = self.combineTwoBytesToOneAddress(operand2, operand1)
+        effectiveAddress: UInt16 = fullAddress + self.YRegister.getWriteableInt()
+        valueFromMemory: UInt8 = self.readByte(effectiveAddress)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "DCP", operand1.getHex(), operand2=operand2.getHex(), instructionParameter=f"${fullAddress.getHex()},Y @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}", isIllegal=True)        
+        
+        valueFromMemory -= 1
+        self.RAM.writeAddress(effectiveAddress, valueFromMemory.getWriteableInt())
+        
+        compareResult, negativeFlag, zeroFlag, carryFlag = self.compareValues(self.accumulatorRegister, valueFromMemory)
+        self.negativeFlag = negativeFlag
+        self.zeroFlag = zeroFlag
+        self.carryFlag = carryFlag
+        
+        self.pc += 0x2
+        return 7
+    
+    def IllegalAbsoluteX_DCP(self):
+        operand1: UInt8 = self.readByte(self.pc + 0x1)
+        operand2: UInt8 = self.readByte(self.pc + 0x2)
+        fullAddress: UInt16 = self.combineTwoBytesToOneAddress(operand2, operand1)
+        effectiveAddress: UInt16 = fullAddress + self.XRegister.getWriteableInt()
+        valueFromMemory: UInt8 = self.readByte(effectiveAddress)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "DCP", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}", isIllegal=True)        
+        
+        valueFromMemory -= 1
+        self.RAM.writeAddress(effectiveAddress, valueFromMemory.getWriteableInt())
+        
+        compareResult, negativeFlag, zeroFlag, carryFlag = self.compareValues(self.accumulatorRegister, valueFromMemory)
+        self.negativeFlag = negativeFlag
+        self.zeroFlag = zeroFlag
+        self.carryFlag = carryFlag
+        
+        self.pc += 0x2
+        return 7
+    
+    def IllegalIndirectX_ISB(self): # ISC (ISB, INS) | Nestest likes ISB i guess
+        operand: UInt8 = self.readByte(self.pc + 0x1)
+        zeropageAddress: UInt8 = operand + self.XRegister
+        lowAddressByte: UInt8 = self.readByte(zeropageAddress)
+        highAddressByte: UInt8 = self.readByte(zeropageAddress + 0x1)
+        fullAddress: UInt16 = self.combineTwoBytesToOneAddress(highAddressByte, lowAddressByte)
+        memoryBefore: UInt8 = self.readByte(fullAddress)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "ISB", operand.getHex(), instructionParameter=f"(${operand.getHex()},X) @ {(zeropageAddress).getHex()} = {fullAddress.getHex()} = {memoryBefore.getHex()}", isIllegal=True)
+        
+        memoryBefore += 1
+        self.RAM.writeAddress(fullAddress, memoryBefore.getWriteableInt())
+        
+        accumulatorRegister, negativeFlag, zeroFlag, overflowFlag, carryFlag = self.SBC(self.accumulatorRegister, memoryBefore, self.carryFlag)
+        
+        self.accumulatorRegister = accumulatorRegister
+        self.negativeFlag = negativeFlag
+        self.zeroFlag = zeroFlag
+        self.overflowFlag = overflowFlag
+        self.carryFlag = carryFlag
+        
+        self.pc += 0x1
+        return 8
+    
+    def IllegalZeropageISB(self):
+        operand: UInt8 = self.readByte(self.pc + 0x1)
+        operandValue: UInt8 = self.readByte(operand)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "ISB", operand.getHex(), instructionParameter=f"${operand.getHex()} = {operandValue.getHex()}", isIllegal=True)        
+        
+        operandValue += 1
+        self.RAM.writeAddress(operand, operandValue.getWriteableInt())
+        
+        accumulatorRegister, negativeFlag, zeroFlag, overflowFlag, carryFlag = self.SBC(self.accumulatorRegister, operandValue, self.carryFlag)
+        
+        self.accumulatorRegister = accumulatorRegister
+        self.negativeFlag = negativeFlag
+        self.zeroFlag = zeroFlag
+        self.overflowFlag = overflowFlag
+        self.carryFlag = carryFlag
+        
+        self.pc += 0x1
+        return 5
+    
+    def IllegalAbsoluteISB(self):
+        PCL: UInt8 = self.readByte(self.pc + 0x1)
+        PCH: UInt8 = self.readByte(self.pc + 0x2)
+        address: UInt16 = self.combineTwoBytesToOneAddress(PCH, PCL)
+        valueToTest: UInt8 = self.readByte(address)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "ISB", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToTest.getHex()}", isIllegal=True)        
+        
+        valueToTest += 1
+        self.RAM.writeAddress(address, valueToTest.getWriteableInt())
+        
+        accumulatorRegister, negativeFlag, zeroFlag, overflowFlag, carryFlag = self.SBC(self.accumulatorRegister, valueToTest, self.carryFlag)
+        
+        self.accumulatorRegister = accumulatorRegister
+        self.negativeFlag = negativeFlag
+        self.zeroFlag = zeroFlag
+        self.overflowFlag = overflowFlag
+        self.carryFlag = carryFlag
+        
+        self.pc += 0x2
+        return 6
+    
+    def IllegalIndirectY_ISB(self):
+        operand: UInt8 = self.readByte(self.pc + 0x1)
+        baseAddressLow: UInt8 = self.readByte(operand)
+        baseAddressHigh: UInt8 = self.readByte(operand + 0x1)
+        baseAddress: UInt16 = self.combineTwoBytesToOneAddress(baseAddressHigh, baseAddressLow)
+        newAddress: UInt8 = baseAddress + self.YRegister.getWriteableInt()
+        valueToTest: UInt8 = self.readByte(newAddress)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "ISB", operand.getHex(), instructionParameter=f"(${operand.getHex()}),Y = {baseAddress.getHex()} @ {newAddress.getHex()} = {valueToTest.getHex()}", isIllegal=True)        
+        
+        valueToTest += 1
+        self.RAM.writeAddress(newAddress, valueToTest.getWriteableInt())
+        
+        accumulatorRegister, negativeFlag, zeroFlag, overflowFlag, carryFlag = self.SBC(self.accumulatorRegister, valueToTest, self.carryFlag)
+        
+        self.accumulatorRegister = accumulatorRegister
+        self.negativeFlag = negativeFlag
+        self.zeroFlag = zeroFlag
+        self.overflowFlag = overflowFlag
+        self.carryFlag = carryFlag
+        
+        self.pc += 0x1
+        return 8
+    
+    def IllegalZeropageX_ISB(self):
+        operand: UInt8 = self.readByte(self.pc + 0x1)
+        zeropageAddress: UInt8 = operand + self.XRegister.value 
+        value: UInt8 = self.readByte(zeropageAddress)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "ISB", operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {value.getHex()}", isIllegal=True)
+        
+        value += 1
+        self.RAM.writeAddress(zeropageAddress, value.getWriteableInt())
+        
+        accumulatorRegister, negativeFlag, zeroFlag, overflowFlag, carryFlag = self.SBC(self.accumulatorRegister, value, self.carryFlag)
+        
+        self.accumulatorRegister = accumulatorRegister
+        self.negativeFlag = negativeFlag
+        self.zeroFlag = zeroFlag
+        self.overflowFlag = overflowFlag
+        self.carryFlag = carryFlag
+        
+        self.pc += 0x1
+        return 6
+    
+    def IllegalAbsoluteY_ISB(self):
+        operand1: UInt8 = self.readByte(self.pc + 0x1)
+        operand2: UInt8 = self.readByte(self.pc + 0x2)
+        fullAddress: UInt16 = self.combineTwoBytesToOneAddress(operand2, operand1)
+        effectiveAddress: UInt16 = fullAddress + self.YRegister.getWriteableInt()
+        valueFromMemory: UInt8 = self.readByte(effectiveAddress)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "ISB", operand1.getHex(), operand2=operand2.getHex(), instructionParameter=f"${fullAddress.getHex()},Y @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}", isIllegal=True)        
+        
+        valueFromMemory += 1
+        self.RAM.writeAddress(effectiveAddress, valueFromMemory.getWriteableInt())
+        
+        accumulatorRegister, negativeFlag, zeroFlag, overflowFlag, carryFlag = self.SBC(self.accumulatorRegister, valueFromMemory, self.carryFlag)
+        
+        self.accumulatorRegister = accumulatorRegister
+        self.negativeFlag = negativeFlag
+        self.zeroFlag = zeroFlag
+        self.overflowFlag = overflowFlag
+        self.carryFlag = carryFlag
+        
+        self.pc += 0x2
+        return 7
+    
+    def IllegalAbsoluteX_ISB(self):
+        operand1: UInt8 = self.readByte(self.pc + 0x1)
+        operand2: UInt8 = self.readByte(self.pc + 0x2)
+        fullAddress: UInt16 = self.combineTwoBytesToOneAddress(operand2, operand1)
+        effectiveAddress: UInt16 = fullAddress + self.XRegister.getWriteableInt()
+        valueFromMemory: UInt8 = self.readByte(effectiveAddress)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "ISB", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}", isIllegal=True)        
+        
+        valueFromMemory += 1
+        self.RAM.writeAddress(effectiveAddress, valueFromMemory.getWriteableInt())
+        
+        accumulatorRegister, negativeFlag, zeroFlag, overflowFlag, carryFlag = self.SBC(self.accumulatorRegister, valueFromMemory, self.carryFlag)
+        
+        self.accumulatorRegister = accumulatorRegister
+        self.negativeFlag = negativeFlag
+        self.zeroFlag = zeroFlag
+        self.overflowFlag = overflowFlag
+        self.carryFlag = carryFlag
+        
+        self.pc += 0x2
+        return 7
+    
+    
+    def IllegalIndirectX_SLO(self):
+        operand: UInt8 = self.readByte(self.pc + 0x1)
+        zeropageAddress: UInt8 = operand + self.XRegister
+        lowAddressByte: UInt8 = self.readByte(zeropageAddress)
+        highAddressByte: UInt8 = self.readByte(zeropageAddress + 0x1)
+        fullAddress: UInt16 = self.combineTwoBytesToOneAddress(highAddressByte, lowAddressByte)
+        memoryBefore: UInt8 = self.readByte(fullAddress)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "SLO", operand.getHex(), instructionParameter=f"(${operand.getHex()},X) @ {(zeropageAddress).getHex()} = {fullAddress.getHex()} = {memoryBefore.getHex()}", isIllegal=True)
+        
+        
+        aslResult, carryFlag, negativeFlag, zeroFlag = self.ASL(memoryBefore)
+        self.RAM.writeAddress(fullAddress, aslResult.getWriteableInt())        
+        self.carryFlag = carryFlag
+        
+        orResult: Int8 = self.ORA(self.accumulatorRegister, aslResult.getWriteableInt())
+        self.accumulatorRegister = orResult
+        self.updateNegativeFlag(self.accumulatorRegister)
+        self.updateZeroFlag(self.accumulatorRegister)
+        
+        
+        self.pc += 0x1
+        return 8
+    
+    def IllegalZeropageSLO(self):
+        operand: UInt8 = self.readByte(self.pc + 0x1)
+        operandValue: UInt8 = self.readByte(operand)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "SLO", operand.getHex(), instructionParameter=f"${operand.getHex()} = {operandValue.getHex()}", isIllegal=True)        
+        
+        aslResult, carryFlag, negativeFlag, zeroFlag = self.ASL(operandValue)
+        self.RAM.writeAddress(operand, aslResult.getWriteableInt())        
+        self.carryFlag = carryFlag
+        
+        orResult: Int8 = self.ORA(self.accumulatorRegister, aslResult.getWriteableInt())
+        self.accumulatorRegister = orResult
+        self.updateNegativeFlag(self.accumulatorRegister)
+        self.updateZeroFlag(self.accumulatorRegister)
+        
+        self.pc += 0x1
+        return 5
+    
+    def IllegalAbsoluteSLO(self):
+        PCL: UInt8 = self.readByte(self.pc + 0x1)
+        PCH: UInt8 = self.readByte(self.pc + 0x2)
+        address: UInt16 = self.combineTwoBytesToOneAddress(PCH, PCL)
+        valueToTest: UInt8 = self.readByte(address)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "SLO", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToTest.getHex()}", isIllegal=True)        
+        
+        aslResult, carryFlag, negativeFlag, zeroFlag = self.ASL(valueToTest)
+        self.RAM.writeAddress(address, aslResult.getWriteableInt())        
+        self.carryFlag = carryFlag
+        
+        orResult: Int8 = self.ORA(self.accumulatorRegister, aslResult.getWriteableInt())
+        self.accumulatorRegister = orResult
+        self.updateNegativeFlag(self.accumulatorRegister)
+        self.updateZeroFlag(self.accumulatorRegister)
+        
+        self.pc += 0x2
+        return 6
+    
+    def IllegalIndirectY_SLO(self):
+        operand: UInt8 = self.readByte(self.pc + 0x1)
+        baseAddressLow: UInt8 = self.readByte(operand)
+        baseAddressHigh: UInt8 = self.readByte(operand + 0x1)
+        baseAddress: UInt16 = self.combineTwoBytesToOneAddress(baseAddressHigh, baseAddressLow)
+        newAddress: UInt8 = baseAddress + self.YRegister.getWriteableInt()
+        valueToTest: UInt8 = self.readByte(newAddress)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "SLO", operand.getHex(), instructionParameter=f"(${operand.getHex()}),Y = {baseAddress.getHex()} @ {newAddress.getHex()} = {valueToTest.getHex()}", isIllegal=True)        
+        
+        aslResult, carryFlag, negativeFlag, zeroFlag = self.ASL(valueToTest)
+        self.RAM.writeAddress(newAddress, aslResult.getWriteableInt())        
+        self.carryFlag = carryFlag
+        
+        orResult: Int8 = self.ORA(self.accumulatorRegister, aslResult.getWriteableInt())
+        self.accumulatorRegister = orResult
+        self.updateNegativeFlag(self.accumulatorRegister)
+        self.updateZeroFlag(self.accumulatorRegister)
+        
+        self.pc += 0x1
+        return 8
+    
+    def IllegalZeropageX_SLO(self):
+        operand: UInt8 = self.readByte(self.pc + 0x1)
+        zeropageAddress: UInt8 = operand + self.XRegister.value 
+        value: UInt8 = self.readByte(zeropageAddress)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "SLO", operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {value.getHex()}", isIllegal=True)
+        
+        aslResult, carryFlag, negativeFlag, zeroFlag = self.ASL(value)
+        self.RAM.writeAddress(zeropageAddress, aslResult.getWriteableInt())        
+        self.carryFlag = carryFlag
+        
+        orResult: Int8 = self.ORA(self.accumulatorRegister, aslResult.getWriteableInt())
+        self.accumulatorRegister = orResult
+        self.updateNegativeFlag(self.accumulatorRegister)
+        self.updateZeroFlag(self.accumulatorRegister)
+        
+        self.pc += 0x1
+        return 6
+    
+    def IllegalAbsoluteY_SLO(self):
+        operand1: UInt8 = self.readByte(self.pc + 0x1)
+        operand2: UInt8 = self.readByte(self.pc + 0x2)
+        fullAddress: UInt16 = self.combineTwoBytesToOneAddress(operand2, operand1)
+        effectiveAddress: UInt16 = fullAddress + self.YRegister.getWriteableInt()
+        valueFromMemory: UInt8 = self.readByte(effectiveAddress)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "SLO", operand1.getHex(), operand2=operand2.getHex(), instructionParameter=f"${fullAddress.getHex()},Y @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}", isIllegal=True)        
+        
+        aslResult, carryFlag, negativeFlag, zeroFlag = self.ASL(valueFromMemory)
+        self.RAM.writeAddress(effectiveAddress, aslResult.getWriteableInt())        
+        self.carryFlag = carryFlag
+        
+        orResult: Int8 = self.ORA(self.accumulatorRegister, aslResult.getWriteableInt())
+        self.accumulatorRegister = orResult
+        self.updateNegativeFlag(self.accumulatorRegister)
+        self.updateZeroFlag(self.accumulatorRegister)
+        
+        self.pc += 0x2
+        return 7
+    
+    def IllegalAbsoluteX_SLO(self):
+        operand1: UInt8 = self.readByte(self.pc + 0x1)
+        operand2: UInt8 = self.readByte(self.pc + 0x2)
+        fullAddress: UInt16 = self.combineTwoBytesToOneAddress(operand2, operand1)
+        effectiveAddress: UInt16 = fullAddress + self.XRegister.getWriteableInt()
+        valueFromMemory: UInt8 = self.readByte(effectiveAddress)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "SLO", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}", isIllegal=True)        
+        
+        aslResult, carryFlag, negativeFlag, zeroFlag = self.ASL(valueFromMemory)
+        self.RAM.writeAddress(effectiveAddress, aslResult.getWriteableInt())        
+        self.carryFlag = carryFlag
+        
+        orResult: Int8 = self.ORA(self.accumulatorRegister, aslResult.getWriteableInt())
+        self.accumulatorRegister = orResult
+        self.updateNegativeFlag(self.accumulatorRegister)
+        self.updateZeroFlag(self.accumulatorRegister)
+        
+        self.pc += 0x2
+        return 7
+    
+    
+    def IllegalIndirectX_RLA(self):
+        operand: UInt8 = self.readByte(self.pc + 0x1)
+        zeropageAddress: UInt8 = operand + self.XRegister
+        lowAddressByte: UInt8 = self.readByte(zeropageAddress)
+        highAddressByte: UInt8 = self.readByte(zeropageAddress + 0x1)
+        fullAddress: UInt16 = self.combineTwoBytesToOneAddress(highAddressByte, lowAddressByte)
+        memoryBefore: UInt8 = self.readByte(fullAddress)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "RLA", operand.getHex(), instructionParameter=f"(${operand.getHex()},X) @ {(zeropageAddress).getHex()} = {fullAddress.getHex()} = {memoryBefore.getHex()}", isIllegal=True)
+        
+        
+        rolResult, carryFlag, negativeFlag, zeroFlag = self.ROL(memoryBefore, self.carryFlag)
+        self.RAM.writeAddress(fullAddress, rolResult.getWriteableInt())       
+        self.carryFlag = carryFlag
+        
+        andResult: Int8 = self.AND_Values(self.accumulatorRegister, rolResult.getWriteableInt())
+        self.accumulatorRegister = andResult
+        self.updateNegativeFlag(self.accumulatorRegister)
+        self.updateZeroFlag(self.accumulatorRegister)
+        
+        
+        self.pc += 0x1
+        return 8
+    
+    def IllegalZeropageRLA(self):
+        operand: UInt8 = self.readByte(self.pc + 0x1)
+        operandValue: UInt8 = self.readByte(operand)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "RLA", operand.getHex(), instructionParameter=f"${operand.getHex()} = {operandValue.getHex()}", isIllegal=True)        
+        
+        rolResult, carryFlag, negativeFlag, zeroFlag = self.ROL(operandValue, self.carryFlag)
+        self.RAM.writeAddress(operand, rolResult.getWriteableInt())       
+        self.carryFlag = carryFlag
+        
+        andResult: Int8 = self.AND_Values(self.accumulatorRegister, rolResult.getWriteableInt())
+        self.accumulatorRegister = andResult
+        self.updateNegativeFlag(self.accumulatorRegister)
+        self.updateZeroFlag(self.accumulatorRegister)
+        
+        self.pc += 0x1
+        return 5
+    
+    def IllegalAbsoluteRLA(self):
+        PCL: UInt8 = self.readByte(self.pc + 0x1)
+        PCH: UInt8 = self.readByte(self.pc + 0x2)
+        address: UInt16 = self.combineTwoBytesToOneAddress(PCH, PCL)
+        valueToTest: UInt8 = self.readByte(address)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "RLA", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToTest.getHex()}", isIllegal=True)        
+        
+        rolResult, carryFlag, negativeFlag, zeroFlag = self.ROL(valueToTest, self.carryFlag)
+        self.RAM.writeAddress(address, rolResult.getWriteableInt())       
+        self.carryFlag = carryFlag
+        
+        andResult: Int8 = self.AND_Values(self.accumulatorRegister, rolResult.getWriteableInt())
+        self.accumulatorRegister = andResult
+        self.updateNegativeFlag(self.accumulatorRegister)
+        self.updateZeroFlag(self.accumulatorRegister)
+        
+        self.pc += 0x2
+        return 6
+    
+    def IllegalIndirectY_RLA(self):
+        operand: UInt8 = self.readByte(self.pc + 0x1)
+        baseAddressLow: UInt8 = self.readByte(operand)
+        baseAddressHigh: UInt8 = self.readByte(operand + 0x1)
+        baseAddress: UInt16 = self.combineTwoBytesToOneAddress(baseAddressHigh, baseAddressLow)
+        newAddress: UInt8 = baseAddress + self.YRegister.getWriteableInt()
+        valueToTest: UInt8 = self.readByte(newAddress)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "RLA", operand.getHex(), instructionParameter=f"(${operand.getHex()}),Y = {baseAddress.getHex()} @ {newAddress.getHex()} = {valueToTest.getHex()}", isIllegal=True)        
+        
+        rolResult, carryFlag, negativeFlag, zeroFlag = self.ROL(valueToTest, self.carryFlag)
+        self.RAM.writeAddress(newAddress, rolResult.getWriteableInt())       
+        self.carryFlag = carryFlag
+        
+        andResult: Int8 = self.AND_Values(self.accumulatorRegister, rolResult.getWriteableInt())
+        self.accumulatorRegister = andResult
+        self.updateNegativeFlag(self.accumulatorRegister)
+        self.updateZeroFlag(self.accumulatorRegister)
+        
+        self.pc += 0x1
+        return 8
+    
+    def IllegalZeropageX_RLA(self):
+        operand: UInt8 = self.readByte(self.pc + 0x1)
+        zeropageAddress: UInt8 = operand + self.XRegister.value 
+        value: UInt8 = self.readByte(zeropageAddress)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "RLA", operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {value.getHex()}", isIllegal=True)
+        
+        rolResult, carryFlag, negativeFlag, zeroFlag = self.ROL(value, self.carryFlag)
+        self.RAM.writeAddress(zeropageAddress, rolResult.getWriteableInt())       
+        self.carryFlag = carryFlag
+        
+        andResult: Int8 = self.AND_Values(self.accumulatorRegister, rolResult.getWriteableInt())
+        self.accumulatorRegister = andResult
+        self.updateNegativeFlag(self.accumulatorRegister)
+        self.updateZeroFlag(self.accumulatorRegister)
+        
+        self.pc += 0x1
+        return 6
+    
+    def IllegalAbsoluteY_RLA(self):
+        operand1: UInt8 = self.readByte(self.pc + 0x1)
+        operand2: UInt8 = self.readByte(self.pc + 0x2)
+        fullAddress: UInt16 = self.combineTwoBytesToOneAddress(operand2, operand1)
+        effectiveAddress: UInt16 = fullAddress + self.YRegister.getWriteableInt()
+        valueFromMemory: UInt8 = self.readByte(effectiveAddress)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "RLA", operand1.getHex(), operand2=operand2.getHex(), instructionParameter=f"${fullAddress.getHex()},Y @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}", isIllegal=True)        
+        
+        rolResult, carryFlag, negativeFlag, zeroFlag = self.ROL(valueFromMemory, self.carryFlag)
+        self.RAM.writeAddress(effectiveAddress, rolResult.getWriteableInt())       
+        self.carryFlag = carryFlag
+        
+        andResult: Int8 = self.AND_Values(self.accumulatorRegister, rolResult.getWriteableInt())
+        self.accumulatorRegister = andResult
+        self.updateNegativeFlag(self.accumulatorRegister)
+        self.updateZeroFlag(self.accumulatorRegister)
+        
+        self.pc += 0x2
+        return 7
+    
+    def IllegalAbsoluteX_RLA(self):
+        operand1: UInt8 = self.readByte(self.pc + 0x1)
+        operand2: UInt8 = self.readByte(self.pc + 0x2)
+        fullAddress: UInt16 = self.combineTwoBytesToOneAddress(operand2, operand1)
+        effectiveAddress: UInt16 = fullAddress + self.XRegister.getWriteableInt()
+        valueFromMemory: UInt8 = self.readByte(effectiveAddress)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "RLA", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}", isIllegal=True)        
+        
+        rolResult, carryFlag, negativeFlag, zeroFlag = self.ROL(valueFromMemory, self.carryFlag)
+        self.RAM.writeAddress(effectiveAddress, rolResult.getWriteableInt())       
+        self.carryFlag = carryFlag
+        
+        andResult: Int8 = self.AND_Values(self.accumulatorRegister, rolResult.getWriteableInt())
+        self.accumulatorRegister = andResult
+        self.updateNegativeFlag(self.accumulatorRegister)
+        self.updateZeroFlag(self.accumulatorRegister)
+        
+        self.pc += 0x2
+        return 7
+    
+    def IllegalIndirectX_SRE(self):
+        operand: UInt8 = self.readByte(self.pc + 0x1)
+        zeropageAddress: UInt8 = operand + self.XRegister
+        lowAddressByte: UInt8 = self.readByte(zeropageAddress)
+        highAddressByte: UInt8 = self.readByte(zeropageAddress + 0x1)
+        fullAddress: UInt16 = self.combineTwoBytesToOneAddress(highAddressByte, lowAddressByte)
+        memoryBefore: UInt8 = self.readByte(fullAddress)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "SRE", operand.getHex(), instructionParameter=f"(${operand.getHex()},X) @ {(zeropageAddress).getHex()} = {fullAddress.getHex()} = {memoryBefore.getHex()}", isIllegal=True)
+        
+        
+        rolResult, carryFlag, negativeFlag, zeroFlag = self.ROL(memoryBefore, self.carryFlag)
+        self.RAM.writeAddress(fullAddress, rolResult.getWriteableInt())       
+        self.carryFlag = carryFlag
+        
+        andResult: Int8 = self.AND_Values(self.accumulatorRegister, rolResult.getWriteableInt())
+        self.accumulatorRegister = andResult
+        self.updateNegativeFlag(self.accumulatorRegister)
+        self.updateZeroFlag(self.accumulatorRegister)
+        
+        
+        self.pc += 0x1
+        return 8
+    """
+    def IllegalZeropageSRE(self):
+        operand: UInt8 = self.readByte(self.pc + 0x1)
+        operandValue: UInt8 = self.readByte(operand)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "SRE", operand.getHex(), instructionParameter=f"${operand.getHex()} = {operandValue.getHex()}", isIllegal=True)        
+        
+        rolResult, carryFlag, negativeFlag, zeroFlag = self.ROL(operandValue, self.carryFlag)
+        self.RAM.writeAddress(operand, rolResult.getWriteableInt())       
+        self.carryFlag = carryFlag
+        
+        andResult: Int8 = self.AND_Values(self.accumulatorRegister, rolResult.getWriteableInt())
+        self.accumulatorRegister = andResult
+        self.updateNegativeFlag(self.accumulatorRegister)
+        self.updateZeroFlag(self.accumulatorRegister)
+        
+        self.pc += 0x1
+        return 5
+    
+    def IllegalAbsoluteSRE(self):
+        PCL: UInt8 = self.readByte(self.pc + 0x1)
+        PCH: UInt8 = self.readByte(self.pc + 0x2)
+        address: UInt16 = self.combineTwoBytesToOneAddress(PCH, PCL)
+        valueToTest: UInt8 = self.readByte(address)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "SRE", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToTest.getHex()}", isIllegal=True)        
+        
+        rolResult, carryFlag, negativeFlag, zeroFlag = self.ROL(valueToTest, self.carryFlag)
+        self.RAM.writeAddress(address, rolResult.getWriteableInt())       
+        self.carryFlag = carryFlag
+        
+        andResult: Int8 = self.AND_Values(self.accumulatorRegister, rolResult.getWriteableInt())
+        self.accumulatorRegister = andResult
+        self.updateNegativeFlag(self.accumulatorRegister)
+        self.updateZeroFlag(self.accumulatorRegister)
+        
+        self.pc += 0x2
+        return 6
+    
+    def IllegalIndirectY_SRE(self):
+        operand: UInt8 = self.readByte(self.pc + 0x1)
+        baseAddressLow: UInt8 = self.readByte(operand)
+        baseAddressHigh: UInt8 = self.readByte(operand + 0x1)
+        baseAddress: UInt16 = self.combineTwoBytesToOneAddress(baseAddressHigh, baseAddressLow)
+        newAddress: UInt8 = baseAddress + self.YRegister.getWriteableInt()
+        valueToTest: UInt8 = self.readByte(newAddress)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "SRE", operand.getHex(), instructionParameter=f"(${operand.getHex()}),Y = {baseAddress.getHex()} @ {newAddress.getHex()} = {valueToTest.getHex()}", isIllegal=True)        
+        
+        rolResult, carryFlag, negativeFlag, zeroFlag = self.ROL(valueToTest, self.carryFlag)
+        self.RAM.writeAddress(newAddress, rolResult.getWriteableInt())       
+        self.carryFlag = carryFlag
+        
+        andResult: Int8 = self.AND_Values(self.accumulatorRegister, rolResult.getWriteableInt())
+        self.accumulatorRegister = andResult
+        self.updateNegativeFlag(self.accumulatorRegister)
+        self.updateZeroFlag(self.accumulatorRegister)
+        
+        self.pc += 0x1
+        return 8
+    
+    def IllegalZeropageX_SRE(self):
+        operand: UInt8 = self.readByte(self.pc + 0x1)
+        zeropageAddress: UInt8 = operand + self.XRegister.value 
+        value: UInt8 = self.readByte(zeropageAddress)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "SRE", operand.getHex(), instructionParameter=f"${operand.getHex()},X @ {zeropageAddress.getHex()} = {value.getHex()}", isIllegal=True)
+        
+        rolResult, carryFlag, negativeFlag, zeroFlag = self.ROL(value, self.carryFlag)
+        self.RAM.writeAddress(zeropageAddress, rolResult.getWriteableInt())       
+        self.carryFlag = carryFlag
+        
+        andResult: Int8 = self.AND_Values(self.accumulatorRegister, rolResult.getWriteableInt())
+        self.accumulatorRegister = andResult
+        self.updateNegativeFlag(self.accumulatorRegister)
+        self.updateZeroFlag(self.accumulatorRegister)
+        
+        self.pc += 0x1
+        return 6
+    
+    def IllegalAbsoluteY_RLA(self):
+        operand1: UInt8 = self.readByte(self.pc + 0x1)
+        operand2: UInt8 = self.readByte(self.pc + 0x2)
+        fullAddress: UInt16 = self.combineTwoBytesToOneAddress(operand2, operand1)
+        effectiveAddress: UInt16 = fullAddress + self.YRegister.getWriteableInt()
+        valueFromMemory: UInt8 = self.readByte(effectiveAddress)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "SRE", operand1.getHex(), operand2=operand2.getHex(), instructionParameter=f"${fullAddress.getHex()},Y @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}", isIllegal=True)        
+        
+        rolResult, carryFlag, negativeFlag, zeroFlag = self.ROL(valueFromMemory, self.carryFlag)
+        self.RAM.writeAddress(effectiveAddress, rolResult.getWriteableInt())       
+        self.carryFlag = carryFlag
+        
+        andResult: Int8 = self.AND_Values(self.accumulatorRegister, rolResult.getWriteableInt())
+        self.accumulatorRegister = andResult
+        self.updateNegativeFlag(self.accumulatorRegister)
+        self.updateZeroFlag(self.accumulatorRegister)
+        
+        self.pc += 0x2
+        return 7
+    
+    def IllegalAbsoluteX_SRE(self):
+        operand1: UInt8 = self.readByte(self.pc + 0x1)
+        operand2: UInt8 = self.readByte(self.pc + 0x2)
+        fullAddress: UInt16 = self.combineTwoBytesToOneAddress(operand2, operand1)
+        effectiveAddress: UInt16 = fullAddress + self.XRegister.getWriteableInt()
+        valueFromMemory: UInt8 = self.readByte(effectiveAddress)
+        
+        self.logInstruction(self.readByte(self.pc).getHex(), "SRE", operand1.getHex(), operand2.getHex(), f"${fullAddress.getHex()},X @ {effectiveAddress.getHex()} = {valueFromMemory.getHex()}", isIllegal=True)        
+        
+        rolResult, carryFlag, negativeFlag, zeroFlag = self.ROL(valueFromMemory, self.carryFlag)
+        self.RAM.writeAddress(effectiveAddress, rolResult.getWriteableInt())       
+        self.carryFlag = carryFlag
+        
+        andResult: Int8 = self.AND_Values(self.accumulatorRegister, rolResult.getWriteableInt())
+        self.accumulatorRegister = andResult
+        self.updateNegativeFlag(self.accumulatorRegister)
+        self.updateZeroFlag(self.accumulatorRegister)
+        
+        self.pc += 0x2
+        return 7
+    """
     
     
     def empty(self): return 0
