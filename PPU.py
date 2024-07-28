@@ -131,13 +131,30 @@ class PPU:
         return value
     
     def readVRAM(self):
+        address = self.address
         data = self.ppuDataBuffer
-        self.ppuDataBuffer = self.vram[self.address]
+        self.ppuDataBuffer = self.vram[address]
         
         # Palette gets read instantly
-        if self.address >= 0x3F00: data = self.ppuDataBuffer
-        #self.address += 1
+        if address >= 0x3F00 and address <= 0x3F20: # 0x3F1F
+            # dont increment if we're reading from the palette
+            if address > 0x3F00: self.address -= 1
+            data = self.ppuDataBuffer
+
+        self.address += 1
         return data
+    
+    def writeVRAM(self, data):
+        address = self.address
+        if address >= 0x3F00 and address <= 0x3F1F:
+            mirroredAddress = address & 0x3F1F
+            self.vram[mirroredAddress] = data
+            if mirroredAddress in [0x3F00, 0x3F04, 0x3F08, 0x3F0C]:
+                self.vram[mirroredAddress + 0x10] = data
+            elif mirroredAddress in [0x3F10, 0x3F14, 0x3F18, 0x3F1C]:
+                self.vram[mirroredAddress - 0x10] = data
+        else:
+            self.vram[address] = data
     
     def writeRegister(self, register, value, mirrorRegisters: bool = False, fromRAM: bool = False):
         if register == 0x2000:
@@ -167,7 +184,7 @@ class PPU:
                 self.address = (self.address & 0xFF00) | value
                 self.writeToggle = 0
         elif register == 0x2007:
-            self.vram[self.address] = value
+            self.writeVRAM(value)
             self.address += 1
             return
         else:
@@ -180,6 +197,9 @@ class PPU:
     def getPaletteFromIndex(self, paletteIndex, colorTuple=False) -> list:
         paletteStart = 0x3F00
         #backgroundColor = self.vram[paletteStart]
+        #allPalettes = self.vram[paletteStart:paletteStart+0x1D]
+        #print(len(allPalettes), allPalettes)
+        
         palette = []
         for i in range(4):
             address = paletteStart + 1 + (paletteIndex*4) + i
