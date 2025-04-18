@@ -425,7 +425,7 @@ class CPU():
     def accumulator(self, bytesToRead, cycles, func):
         self.logInstruction("A", func.__name__, [self.memory.read(self.pc)])
         
-        func(self.regA)
+        func(self.regA, addr="A")
         return (bytesToRead, cycles)
 
     def immediate(self, bytesToRead, cycles, func):
@@ -443,7 +443,11 @@ class CPU():
         valueAddress = (addressHigh << 8) | addressLow
         value = self.memory.read(valueAddress)
         
-        self.logInstruction(f"${hex(valueAddress).split('0x')[1].zfill(4)}", func.__name__, [self.memory.read(self.pc), addressLow, addressHigh])
+        if self.logsEnabled:
+            equalString = f"= {hex(value).split('0x')[1].zfill(2)}"
+            if func.__name__ in ["JMP", "JSR"]:
+                equalString = ""
+            self.logInstruction(f"${hex(valueAddress).split('0x')[1].zfill(4)} {equalString}", func.__name__, [self.memory.read(self.pc), addressLow, addressHigh])
         
         func(value, addr=valueAddress)
     
@@ -768,15 +772,17 @@ class CPU():
         
         # A = A - memory - ~C, or equivalently: A = A + ~memory + C
         invertedValue = ~value + 256
+        invertedCarry = 0 if self.carryFlag == 1 else 1
         
-        result = self.regA + invertedValue + self.carryFlag
+        #result = self.regA + invertedValue + self.carryFlag
+        result = self.regA - value - invertedCarry
         resultFixed = result % 0x100
         self.regA = resultFixed
         
         self.carryFlag = 0 if result < 0x00 else 1 # Same as ~(result < 0x00)
         self.updateZeroFlag(resultFixed)
         # If result's sign is different from A's and the same as memory's, signed overflow (or underflow) occurred
-        self.overflowFlag = 1 if (result & 0x80 != initRegA & 0x80) and (result & 0x80 == invertedValue & 0x80) else 0
+        self.overflowFlag = 1 if (result & 0x80 != initRegA & 0x80) and (result & 0x80 == value & 0x80) else 0
         self.updateNegativeFlag(resultFixed)
 
     def INY(self):
@@ -867,6 +873,11 @@ class CPU():
 
     def LSR(self, value, addr=None):
         result = (value >> 1) % 0x100
+        
+        if addr == "A":
+            self.regA = result
+        if addr != None:
+            self.memory.write(addr, result)
         
         self.carryFlag = (value & 0b00000001)
         self.updateZeroFlag(result)
