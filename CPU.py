@@ -24,6 +24,8 @@ class CPU():
         self.logsEnabled = False
         self.logs = ""
         self.queuedChanges = []
+
+        self.instructionsExecuted = 0
         
         self.instructions = {
             0x00: self.undefined_instruction,
@@ -80,7 +82,7 @@ class CPU():
             0x3E: lambda: self.absoluteX(3, 7, self.ROL),
             
             0x40: lambda: self.implicit(self.RTI),
-            0x41: lambda: self.indirectX(1, 6, self.EOR),
+            0x41: lambda: self.indirectX(2, 6, self.EOR),
             0x42: self.undefined_instruction,
                 0x43: lambda: self.indirectX(1, 6, self.SRE),
                 0x44: lambda: self.zeroPage(2, 3, self.NOP),
@@ -107,7 +109,7 @@ class CPU():
             0x5E: lambda: self.absoluteX(3, 7, self.LSR),
             
             0x60: lambda: self.implicit(self.RTS),
-            0x61: lambda: self.indirectX(1, 6, self.ADC),
+            0x61: lambda: self.indirectX(2, 6, self.ADC),
             0x62: self.undefined_instruction,
                 0x64: lambda: self.zeroPage(2, 3, self.NOP),
             0x65: lambda: self.zeroPage(2, 3, self.ADC),
@@ -191,7 +193,7 @@ class CPU():
             0xBA: lambda: self.implicit(self.TSX),
             0xBC: lambda: self.absoluteX(3, 4, self.LDY),
             0xBD: lambda: self.absoluteX(3, 4, self.LDA),
-            0xBE: lambda: self.absoluteX(3, 4, self.LDX),
+            0xBE: lambda: self.absoluteY(3, 4, self.LDX),
                 0xBF: lambda: self.absoluteY(3, 4, self.LAX),
             
             0xC0: lambda: self.immediate(2, 2, self.CPY),
@@ -266,14 +268,18 @@ class CPU():
         self.memory.dumpMemory()
         self.handleQueuedChanges()
         
+        #self.executeInstruction()
+
+        #"""
         try:
             self.executeInstruction()
-        except:
+        except Exception as e:
             if self.logsEnabled:
                 with open("logs.txt", "w") as f:
                     f.write(self.logs)
                     f.close()
                     exit()
+        #"""
 
     def handleQueuedChanges(self):
         """
@@ -306,6 +312,8 @@ class CPU():
         #print(f"{hex(self.pc)}: {hex(opcode)}")
 
         bytesRead, clockCycles = instruction()
+        self.instructionsExecuted += 1
+
         self.pc += bytesRead
         
 
@@ -454,15 +462,30 @@ class CPU():
         return (bytesToRead, cycles)
     
     def absoluteX(self, bytesToRead, cycles, func):
-        valueAddress = (self.memory.read(self.pc+2) << 8) | (self.memory.read(self.pc+1)) + self.regX
+        lowByte = self.memory.read(self.pc+1)
+        highByte = self.memory.read(self.pc+2)
+        
+        address = (highByte << 8) | lowByte
+        valueAddress = (address + self.regX ) % 0x10000
         value = self.memory.read(valueAddress)
+        
+        self.logInstruction(f"${hex(address).split('0x')[1].zfill(4)},X @ {hex(valueAddress).split('0x')[1].zfill(4)} = {hex(value).split('0x')[1].zfill(2)}", func.__name__, [self.memory.read(self.pc), lowByte, highByte])
+        
         func(value, addr=valueAddress)
     
         return (bytesToRead, cycles)
     
     def absoluteY(self, bytesToRead, cycles, func):
-        valueAddress = (self.memory.read(self.pc+2) << 8) | (self.memory.read(self.pc+1)) + self.regY
+        lowByte = self.memory.read(self.pc + 1)
+        highByte = self.memory.read(self.pc + 2)
+        
+        address = ((highByte << 8) | lowByte)
+        valueAddress = (address + self.regY) % 0x10000
+        
         value = self.memory.read(valueAddress)
+        
+        self.logInstruction(f"${hex(address).split('0x')[1].zfill(4)},Y @ {hex(valueAddress).split('0x')[1].zfill(4)} = {hex(value).split('0x')[1].zfill(2)}", func.__name__, [self.memory.read(self.pc), lowByte, highByte])
+        
         func(value, addr=valueAddress)
     
         return (bytesToRead, cycles)
@@ -493,17 +516,23 @@ class CPU():
 
     def zeroPageX(self, bytesToRead, cycles, func):
         # Zero Page but add X to the address
-        address = self.memory.read(self.pc + 1) + self.regX
+        zpOperand = self.memory.read(self.pc + 1)
+        address = (zpOperand + self.regX) % 0x100 # Zero page, make sure the address stays in 1 byte
         valueAtAddress = self.memory.read(address)
+        
+        self.logInstruction(f"${hex(zpOperand).split('0x')[1].zfill(2)},X @ {hex(address).split('0x')[1].zfill(2)} = {hex(valueAtAddress).split('0x')[1].zfill(2)}", func.__name__, [self.memory.read(self.pc), zpOperand])
         
         func(valueAtAddress, address)
         
         return (bytesToRead, cycles)
 
     def zeroPageY(self, bytesToRead, cycles, func):
-        # Zero Page but add X to the address
-        address = self.memory.read(self.pc + 1) + self.regY
+        # Zero Page but add Y to the address
+        zpOperand = self.memory.read(self.pc + 1)
+        address = (zpOperand + self.regY) % 0x100 # Zero page, make sure the address stays in 1 byte
         valueAtAddress = self.memory.read(address)
+        
+        self.logInstruction(f"${hex(zpOperand).split('0x')[1].zfill(2)},Y @ {hex(address).split('0x')[1].zfill(2)} = {hex(valueAtAddress).split('0x')[1].zfill(2)}", func.__name__, [self.memory.read(self.pc), zpOperand])
         
         func(valueAtAddress, address)
         
@@ -511,14 +540,16 @@ class CPU():
 
     def indirect(self, bytesToRead, cycles, func): # This is only used for JMP so I can bs the structure!
         realLowByte = self.memory.read(self.pc+1)
-        realHighByte = self.memory.read(self.pc+2) << 8
-        realAddressPointer = realHighByte | realLowByte
+        realHighByte = self.memory.read(self.pc+2)
+        realAddressPointer = (realHighByte << 8) | realLowByte
      
         jumpAddressLowByte = self.memory.read(realAddressPointer)
         endOfPageBugOffset = -0x100 if (realAddressPointer & 0xFF) == 0xFF else 0 # -255 (one byte) and that one already being added which turns 0x3100 to 0x3000 instead
 
         jumpAddressHighByte = self.memory.read(realAddressPointer + 1 + endOfPageBugOffset) << 8
         jumpAddress = jumpAddressHighByte | jumpAddressLowByte
+        
+        self.logInstruction(f"(${hex(realAddressPointer).split('0x')[1].zfill(4)}) = {hex(jumpAddress).split('0x')[1].zfill(4)}", func.__name__, [self.memory.read(self.pc), realLowByte, realHighByte])
         
         func(None, addr=jumpAddress)
     
@@ -527,24 +558,35 @@ class CPU():
     def indirectX(self, bytesToRead, cycles, func):
         # Zero page + X
         addressLocationInMemory = self.memory.read(self.pc + 1) + self.regX
-        addressBottomByte = self.memory.read(addressLocationInMemory) #0x00FF
-        addressTopByte = self.memory.read(addressLocationInMemory + 1) #0xFF00
+        # Wrap around the zero page if we go out of it
+        addressBottomByte = self.memory.read(addressLocationInMemory % 0x100) #0x00FF
+        addressTopByte = self.memory.read((addressLocationInMemory + 1) % 0x100) #0xFF00
         address = (addressTopByte << 8) | addressBottomByte
         
         valueAtAddress = self.memory.read(address)
-        
+
+        afterMnemonic = f"(${hex(self.memory.read(self.pc+1)).split('0x')[1].zfill(2)},X) @ {hex(addressLocationInMemory % 0x100).split('0x')[1].zfill(2)}"
+        afterMnemonic += f" = {hex(address).split('0x')[1].zfill(4)} = {hex(valueAtAddress).split('0x')[1].zfill(2)}"
+        self.logInstruction(afterMnemonic, func.__name__, [self.memory.read(self.pc), self.memory.read(self.pc+1)])
+
         func(valueAtAddress, address)
         
         return (bytesToRead, cycles)
 
     def indirectY(self, bytesToRead, cycles, func):
-        # Zero page + Y
-        addressLocationInMemory = self.memory.read(self.pc + 1) + self.regY
-        addressBottomByte = self.memory.read(addressLocationInMemory) #0x00FF
-        addressTopByte = self.memory.read(addressLocationInMemory + 1) #0xFF00
+        # Zero page, then add Y to the extracted address
+        addressLocationInMemory = self.memory.read(self.pc + 1)
+        # Wrap around the zero page if we go out of it
+        addressBottomByte = self.memory.read((addressLocationInMemory + 0) % 0x100) #0x00FF
+        addressTopByte = self.memory.read((addressLocationInMemory + 1) % 0x100) #0xFF00
         address = (addressTopByte << 8) | addressBottomByte
+        addressWithY = (address + self.regY) % 0x10000 # Make sure it is only 2 bytes
         
-        valueAtAddress = self.memory.read(address)
+        valueAtAddress = self.memory.read(addressWithY)
+
+        afterMnemonic = f"(${hex(self.memory.read(self.pc+1)).split('0x')[1].zfill(2)}),Y = {hex(address).split('0x')[1].zfill(4)}"
+        afterMnemonic += f" @ {hex(addressWithY).split('0x')[1].zfill(4)} = {hex(valueAtAddress).split('0x')[1].zfill(2)}"
+        self.logInstruction(afterMnemonic, func.__name__, [self.memory.read(self.pc), self.memory.read(self.pc+1)])
         
         func(valueAtAddress, address)
         
@@ -876,7 +918,7 @@ class CPU():
         
         if addr == "A":
             self.regA = result
-        if addr != None:
+        elif addr != None:
             self.memory.write(addr, result)
         
         self.carryFlag = (value & 0b00000001)
@@ -886,6 +928,11 @@ class CPU():
     def ASL(self, value, addr=None):
         result = (value << 1) % 0x100
         
+        if addr == "A":
+            self.regA = result
+        elif addr != None:
+            self.memory.write(addr, result)
+
         self.carryFlag = (value & 0b10000000) >> 7
         self.updateZeroFlag(result)
         self.updateNegativeFlag(result)
@@ -893,6 +940,11 @@ class CPU():
     def ROR(self, value, addr=None):
         result = (value >> 1) % 0x100
         result |= (self.carryFlag << 7)
+
+        if addr == "A":
+            self.regA = result
+        elif addr != None:
+            self.memory.write(addr, result)
         
         self.carryFlag = (value & 0b00000001)
         self.updateZeroFlag(result)
@@ -901,8 +953,13 @@ class CPU():
     def ROL(self, value, addr=None):
         result = (value << 1) % 0x100
         result |= self.carryFlag # Carry is put into bit 0
+
+        if addr == "A":
+            self.regA = result
+        elif addr != None:
+            self.memory.write(addr, result)
         
-        self.carryFlag = (value & 0b10000000)
+        self.carryFlag = (value & 0b10000000) >> 7
         self.updateZeroFlag(result)
         self.updateNegativeFlag(result)
 
@@ -992,9 +1049,9 @@ class CPU():
 
     def DCP(self, value, addr=None): # DEC + CMP
         # DEC
-        DEC_Value = (self.memory.read(addr) - 1) & 0x100
+        DEC_Value = (self.memory.read(addr) - 1) % 0x100
         self.memory.write(addr, DEC_Value)
-        
+
         # CMP
         subtractResult = self.regA - value
         if subtractResult < 0: subtractResult += 128 * 2 # Make it so it is negative in twos complement

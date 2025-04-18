@@ -15,14 +15,15 @@ for i in range(0, min(totalCPUInstructions,totalNESTESTInstructions)):
     nestest = nestestLogs[i].upper().split("PPU:")[0]
     
     if cpu == nestest:
-        print(nestest, "\t✅")
+        print(nestest, "\t✅", i)
     else:
-        print("\n"*2)
+        print("")
         print(cpu, "\t❌\tYour CPU")
         print(nestest, "\t<---\tNESTEST")
         print(f"Worked for {i} instructions")
         break
 
 print(f"Total NESTEST instructions: {totalNESTESTInstructions}")
+print(f"Total Your CPU instructions executed: {totalCPUInstructions}")
 print(f"NESTEST Total Instructions minus Your CPU's = {totalNESTESTInstructions - totalCPUInstructions}")
 
