@@ -1,84 +1,54 @@
-from BitwiseInts import Int8, UInt8, Int16, UInt16
-from RAM import RAM
+import os
 
 class Cartridge():
-    def __init__(self, filePath: str = "") -> None:
-        if filePath == "": raise FileNotFoundError # Please specify a file
+    def __init__(self, romFileLocation=""):
+        if romFileLocation == "": return
+        if os.path.exists(romFileLocation) == False:
+            raise FileNotFoundError(f"ROM file not found! {romFileLocation}")
         
-        self.filePath = filePath
+        self.byteOrder = "big"
+        self.romPath = romFileLocation
+        self.file = None
         
-        self.PRGMemory: bytearray = bytearray(0)
-        self.CHRMemory: bytearray = bytearray(0)
-        
-        self.mapperID: int = 0
-        self.PRGBanks: int = 0
-        self.CHRBanks: int = 0
-        
-        # iNES Header
-        self.name: str = "" # len 4 (Should just say NES<eof>)
-        self.prgRomChunks: int = 0
-        self.chrRomChunks: int = 0
-        self.mapper1: int = 0
-        self.mapper2: int = 0
-        self.prgRamSize: int = 0
-        self.tvSystem1: int = 0
-        self.tvSystem2: int = 0
-        self.unusedBytes: bytearray = bytearray(5)
-        
-        self.loadFile()
+        self.PRGROM_Size = 0 # in 16 KB Units (16384 bytes)
+        self.CHRROM_Size = 0 # in 8 KB Units (8192 bytes)
     
-    def writePRGToRam(self, RAM: RAM):
-        prgAsBytes = bytes(self.PRGMemory)
+        # Flags 6 from INES (see validateROM)
+        self.nameTableMirrorDir = 0
+        self.hasBatteryBackedRAM = 0
+        self.hasTrainer = 0
+        self.useAlternativeNameTableLayout = 0
+        self.mapperNumber = 0
+    
+    def validateROM(self):
+        # https://www.nesdev.org/wiki/INES
+        constant = self.read(4, location=0)
+        if constant != b"\x4E\x45\x53\x1A": # (ASCII "NES" followed by MS-DOS end-of-file)
+            return False
         
-        if self.prgRomChunks == 1:
-            RAM.writeSpace(UInt16(0x8000), UInt16(0xBFFF), prgAsBytes)
-            RAM.writeSpace(UInt16(0xC000), UInt16(0xFFFF), prgAsBytes)
-        elif self.prgRomChunks == 2:
-            RAM.writeSpace(UInt16(0x8000), UInt16(0xFFFF), prgAsBytes)
+        self.PRGROM_Size = int.from_bytes(self.read(1, location=4), byteorder=self.byteOrder)
+        self.CHRROM_Size = int.from_bytes(self.read(1, location=5), byteorder=self.byteOrder)
+        # Reverse both to make index 0 the least significant bit
+        byteSix = bin(int.from_bytes(self.read(1, location=6), byteorder=self.byteOrder)).replace("0b", "").zfill(8)[::-1]
+        byteSeven = bin(int.from_bytes(self.read(1, location=7), byteorder=self.byteOrder)).replace("0b", "").zfill(8)[::-1]
+        
+        self.mapperNumber = int(f"{byteSeven[4:7+1]}{byteSix[4:7+1]}", 2)
+        
+        return True
+        
+    def load(self):
+        self.file = open(self.romPath, "rb")
+        isValidROM = self.validateROM()
+        if isValidROM == False: print("ROM is not valid!")
+        
+        return isValidROM
     
-    def writeCHRToVram(self, VRAM: bytearray):
-        chrAsBytes = bytes(self.CHRMemory)
-        # Pattern Table 0
-        VRAM[0x0000:0x0FFF] = chrAsBytes[0x0000:0x0FFF]
-        # Pattern Table 1
-        VRAM[0x1000:0x1FFF] = chrAsBytes[0x1000:0x1FFF]
-    
-    def loadFile(self):
-        with open(self.filePath, "rb") as f:
-            header: bytes = f.read(0x10) # read first line, 16 bytes
-            
-            self.name = header[0:4] # bytes 0 to 3
-            self.prgRomChunks = int(header[4]) # amount of 16KB units
-            self.chrRomChunks = int(header[5]) # amount of 8KB units   0 means board uses CHR RAM
-            self.mapper1 = int(header[6])
-            self.mapper2 = int(header[7])
-            self.prgRamSize = int(header[8])
-            self.tvSystem1 = int(header[9])
-            self.tvSystem2 = int(header[10])
-            self.unusedBytes = header[11:16] # Bytes 11 to 15
+    def close(self):
+        self.file.close()
+        return True
 
-            if self.mapper1 & 0x04:
-                f.seek(512)
+    def read(self, numOfBytes, location=0):
+        self.file.seek(location, 0)
+        data = self.file.read(numOfBytes)
+        return data
 
-            self.mapperID = ((self.mapper2 >> 4) << 4) | (self.mapper1 >> 4)
-            
-            # iNES file format (just 1 for now)
-            fileType = 1
-            
-            if fileType == 0:
-                pass
-            
-            elif fileType == 1:
-                self.PRGBanks = self.prgRomChunks
-                self.PRGMemory = bytearray(self.PRGBanks * 16384)
-                f.readinto(self.PRGMemory)
-                
-                self.CHRBanks = self.chrRomChunks
-                self.CHRMemory = bytearray(self.CHRBanks * 8192)
-                f.readinto(self.CHRMemory)
-            
-            elif fileType == 2:
-                pass
-            
-            f.close()
-            

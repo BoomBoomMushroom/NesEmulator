@@ -1,144 +1,25 @@
-from __future__ import annotations
-
-from CPU_Ricoh2A03 import Ricoh2A03
-from RAM import RAM
-from PPU import PPU
 from Cartridge import Cartridge
+from CPU import CPU
+from Memory import Memory
 
-from Screen import Screen, WriteableScreen
+nestestCartridge = Cartridge("./nestest.nes")
+nestestCartridge.load()
 
-#romPath = "SuperMarioBros.nes"
-#romPath = "nestest.nes"
-#romPath = "NESTestCart.nes"
+# Init Console
+NES_Memory = Memory(randomizeMemory=False)
+NES_Memory.loadCartridgeIntoMemory(nestestCartridge)
 
-#with open(romPath, "rb") as f:
-#    romDataBinary = f.read()
+#NES_Memory.dumpMemory()
 
-class NES():
-    def __init__(self) -> None:
-        self.ram = RAM(self, 1024 * 64) # 64 KB of memory
-        
-        self.totalCycles = 0
-        
-        self.screen: WriteableScreen = WriteableScreen((256,256))
-        self.cartridge: Cartridge = None
-        self.ppu: PPU = PPU(self)
-        self.cpu: Ricoh2A03 = Ricoh2A03(self)
+NES_CPU = CPU(NES_Memory)
+NES_CPU.reset()
+# For nestest im foring it to start at 0xC000 to skip the PPU
+NES_CPU.pc = 0xC000
 
-    def reset(self):
-        self.totalCycles = 0
-        self.cpu.reset()
-        #self.ppu.reset()
+running = True
+while running:
+    NES_CPU.tick()
 
-    def loadROM(self, romData):
-        self.cpu.loadRom(romData)
-        
-        self.reset()
+NES_Memory.dumpMemory()
 
-    def insertCartridge(self, cartridge: Cartridge):
-        self.cartridge = cartridge
-        self.cartridge.writePRGToRam(self.ram)
-        self.cartridge.writeCHRToVram(self.ppu.vram)
-        
-        self.reset()
-
-    def step(self):
-        cpuResponse = -2
-        ppuResponse = 0
-        
-        ppuResponse = self.ppu.step()
-        if self.totalCycles % 3 == 0:
-            cpuResponse = self.cpu.step()
-        
-        self.totalCycles += 1
-        return (cpuResponse, ppuResponse, 0)
-
-nestestCartridge = Cartridge("nestest.nes")
-#dkCartridge = Cartridge("Donkey Kong.nes")
-
-screen = Screen()
-console = NES()
-#console.loadROM(romDataBinary)
-console.insertCartridge(nestestCartridge)
-
-#console.cpu.disassembleInstructions(0xc004, 0xc2BF)
-
-isPaused = True
-unpausedForOneTick = False
-owedOneFrameOfUpdate = False
-
-def askToDumpCPUOutputLog():
-    if input("Do you want to dump the CPU logs? (y/n) ") == "y":
-        outputLog = console.cpu.outputLog
-        print(f"\n{outputLog}\n")
-
-
-def updateScreenPalettes():
-    for i in range(0, 8):
-        colors = console.ppu.getPaletteFromIndex(i, True)
-        screen.updatePalettes([i], colors)
-
-def reloadPatternTables():
-    screen.drawPatternTable(console.ppu.vram[0x0000:0x1000], 0) # 0x0000 -> 0x0FFF
-    screen.drawPatternTable(console.ppu.vram[0x1000:0x2000], 1) # 0x1000 -> 0x1FFF
-
-def updateScreen():
-    global owedOneFrameOfUpdate
-    if owedOneFrameOfUpdate == False:
-        if isPaused: screen.tick()
-        if console.ppu.frameComplete == False: return
-    else: owedOneFrameOfUpdate = False
-    
-    screen.drawStatusRegister( console.cpu.negativeFlag, console.cpu.overflowFlag, console.cpu.breakFlag, console.cpu.decimalModeFlag, console.cpu.interruptDisableFlag, console.cpu.zeroFlag, console.cpu.carryFlag )
-    screen.drawRegisters(
-        f"${console.cpu.pc.getHex()}     ",
-        f"${console.cpu.accumulatorRegister.getHex()}  [{console.cpu.accumulatorRegister.getWriteableInt()}]               ",
-        f"${console.cpu.XRegister.getHex()}  [{console.cpu.XRegister.getWriteableInt()}]               ",
-        f"${console.cpu.YRegister.getHex()}  [{console.cpu.YRegister.getWriteableInt()}]               ",
-        f"$00{console.cpu.stackPointer.getHex()}" )
-    
-    if console.ppu.frameComplete: screen.updateScreen(console.screen)
-    console.ppu.frameComplete = False
-    screen.tick()
-
-cpuInstructionLog = open("cpuInstructionLog.txt", "w")
-writes = 0
-
-reloadPatternTables()
-
-while True:
-    if unpausedForOneTick: isPaused = False
-    if screen.didQuit: break
-    if isPaused:
-        updateScreen()
-        continue
-    
-    #if console.totalCycles % 3 == 0:
-    #    writes += 1
-    #    cpuInstructionLog.write(f"{console.cpu.pc.getHex()}\n")
-    
-    #if writes >= 59449: break
-    
-    responses = console.step()
-    if responses[0] == -1:
-        # CPU ERROR
-        with open("cpuOutputLog.txt", "w") as f: f.write(console.cpu.outputLog)
-        askToDumpCPUOutputLog()
-        break
-    elif responses[0] == -2:
-        # CPU didnt run. not it's clock cycle
-        pass
-    elif responses[0] == 0:
-        # CPU ran
-        if unpausedForOneTick:
-            isPaused = True
-            unpausedForOneTick = False
-            owedOneFrameOfUpdate = True
-    
-    updateScreen()
-
-with open("cpuOutputLog.txt", "w") as f: f.write(console.cpu.outputLog)
-cpuInstructionLog.close()
-
-if input("Dump CPU RAM? (y/n) ")=="y":
-    print(console.ram.dumpRAM())
+nestestCartridge.close()

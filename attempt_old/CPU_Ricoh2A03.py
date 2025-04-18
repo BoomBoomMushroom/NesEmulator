@@ -3536,7 +3536,7 @@ class Ricoh2A03:
         self.logInstruction(self.readByte(self.pc).getHex(), "RLA", PCL.getHex(), PCH.getHex(), instructionParameter=f"${address.getHex()} = {valueToTest.getHex()}", isIllegal=True)        
         
         rolResult, carryFlag, negativeFlag, zeroFlag = self.ROL(valueToTest, self.carryFlag)
-        self.RAM.writeAddress(address, rolResult.getWriteableInt())       
+        self.RAM.writeAddress(address, rolResult.getWriteableInt())
         self.carryFlag = carryFlag
         
         andResult: Int8 = self.AND_Values(self.accumulatorRegister, rolResult.getWriteableInt())
