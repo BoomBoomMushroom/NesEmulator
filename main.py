@@ -1,6 +1,8 @@
 from Cartridge import Cartridge
 from CPU import CPU
+from PPU import PPU
 from Memory import Memory
+import time
 
 nestestCartridge = Cartridge("./nestest.nes")
 nestestCartridge.load()
@@ -13,14 +15,24 @@ NES_Memory.loadCartridgeIntoMemory(nestestCartridge)
 
 NES_CPU = CPU(NES_Memory)
 NES_CPU.reset()
-# For nestest im foring it to start at 0xC000 to skip the PPU
-NES_CPU.pc = 0xC000
+
+NES_PPU = PPU(NES_Memory)
+NES_PPU.reset()
+
+# For nestest im forcing it to start at 0xC000 to skip the PPU
+#NES_CPU.pc = 0xC000
 
 NES_CPU.logsEnabled = True
 
 running = True
 while running:
+    NES_PPU.tick()
     NES_CPU.tick()
+    if NES_CPU.halted == 1: break
+    
+    #time.sleep(1 / 10)
+    # Comment out the time.sleep to overclock the NES
+    # time.sleep(1 / 1790000)
 
 NES_Memory.dumpMemory()
 

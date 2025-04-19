@@ -4,17 +4,18 @@ from Cartridge import Cartridge
 class Memory():
     def __init__(self, randomizeMemory=False):
         # Not all of the memory will 100% be used b/c in the getAddress we change the address if it lies in a mirrored zone
-        self.memory = bytearray(0xffff + 1)# +1 so we can index from 0x0000 to 0xfff
+        self.memory = bytearray(0xffff + 1)# +1 so we can index from 0x0000 to 0xffff
+        self.CHRROM = bytearray(0)
         
         if randomizeMemory: self.makeMemoryRandom()
     
     def loadCartridgeIntoMemory(self, cartridge: Cartridge):
         PRGROM = bytearray(cartridge.PRGROM_Size * 16384)
-        CHRROM = bytearray(cartridge.CHRROM_Size * 8192)
+        self.CHRROM = bytearray(cartridge.CHRROM_Size * 8192)
         
         cartridge.file.seek(0x10, 0)
         cartridge.file.readinto(PRGROM)
-        cartridge.file.readinto(CHRROM)
+        cartridge.file.readinto(self.CHRROM)
         
         self.writeGroup(0x8000, PRGROM)
         if cartridge.PRGROM_Size == 1: # Mirror it again to fill the space

@@ -25,10 +25,13 @@ class CPU():
         self.logs = ""
         self.queuedChanges = []
 
+        self.halted = 0
         self.instructionsExecuted = 0
+        self.cpuClocks = 0
+        self.queuedClockCycles = 0
         
         self.instructions = {
-            0x00: self.undefined_instruction,
+            0x00: lambda: self.implicit(self.BRK),
             0x01: lambda: self.indirectX(2, 6, self.ORA),
             0x02: self.undefined_instruction,
                 0x03: lambda: self.indirectX(2, 8, self.SLO, illegal=True),
@@ -304,11 +307,18 @@ class CPU():
         
     
     def tick(self):
+        if self.queuedClockCycles > 0:
+            self.queuedClockCycles -= 1
+            return
+        
+        # Maybe this will always tick?
+        self.cpuClocks += 1
+        
         self.handleQueuedChanges()
         
-        #self.executeInstruction()
+        self.executeInstruction()
 
-        #"""
+        """
         try:
             self.executeInstruction()
         except Exception as e:
@@ -351,7 +361,8 @@ class CPU():
 
         bytesRead, clockCycles = instruction()
         self.instructionsExecuted += 1
-
+        
+        self.queuedClockCycles += clockCycles
         self.pc += bytesRead
         
 
@@ -731,7 +742,6 @@ class CPU():
         self.pc = address
         return (0, 6) # set bytes (the first item in the tuple) as 0 so we don't inc our PC and use that instruction immediately 
 
-    """
     def BRK(self):
         # Write the address to stack
         addressToWrite = self.pc + 2
@@ -754,8 +764,10 @@ class CPU():
         
         self.interruptDisableFlag = 1
         
+        # idk if this is real, i added the halt myself
+        self.halted = 1
+        
         return (2, 7)
-    """
 
     def BPL(self, offset):
         return self.BranchWithCondition(self.negativeFlag, 0, offset)
