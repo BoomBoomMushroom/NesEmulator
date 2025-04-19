@@ -44,7 +44,7 @@ class CPU():
             0x10: lambda: self.relative(2, 2, self.BPL),
             0x11: lambda: self.indirectY(2, 5, self.ORA),
             0x12: self.undefined_instruction,
-                0x14: lambda: self.indirectX(2, 4, self.NOP),
+                0x14: lambda: self.indirectX(2, 4, self.NOP, illegal=True),
             0x15: lambda: self.zeroPageX(2, 4, self.ORA),
             0x16: lambda: self.zeroPageX(2, 6, self.ASL),
             0x18: lambda: self.implicit(self.CLC),
@@ -446,7 +446,7 @@ class CPU():
         
         return (bytesToRead, cycles)
     
-    def absolute(self, bytesToRead, cycles, func):
+    def absolute(self, bytesToRead, cycles, func, illegal=False):
         addressLow = self.memory.read(self.pc+1)
         addressHigh = self.memory.read(self.pc+2) 
         valueAddress = (addressHigh << 8) | addressLow
@@ -456,7 +456,7 @@ class CPU():
             equalString = f"= {hex(value).split('0x')[1].zfill(2)}"
             if func.__name__ in ["JMP", "JSR"]:
                 equalString = ""
-            self.logInstruction(f"${hex(valueAddress).split('0x')[1].zfill(4)} {equalString}", func.__name__, [self.memory.read(self.pc), addressLow, addressHigh])
+            self.logInstruction(f"${hex(valueAddress).split('0x')[1].zfill(4)} {equalString}", func.__name__, [self.memory.read(self.pc), addressLow, addressHigh], illegal=illegal)
         
         func(value, addr=valueAddress)
     
@@ -556,7 +556,7 @@ class CPU():
     
         return (bytesToRead, cycles)
 
-    def indirectX(self, bytesToRead, cycles, func):
+    def indirectX(self, bytesToRead, cycles, func, illegal=False):
         # Zero page + X
         addressLocationInMemory = self.memory.read(self.pc + 1) + self.regX
         # Wrap around the zero page if we go out of it
@@ -568,7 +568,7 @@ class CPU():
 
         afterMnemonic = f"(${hex(self.memory.read(self.pc+1)).split('0x')[1].zfill(2)},X) @ {hex(addressLocationInMemory % 0x100).split('0x')[1].zfill(2)}"
         afterMnemonic += f" = {hex(address).split('0x')[1].zfill(4)} = {hex(valueAtAddress).split('0x')[1].zfill(2)}"
-        self.logInstruction(afterMnemonic, func.__name__, [self.memory.read(self.pc), self.memory.read(self.pc+1)])
+        self.logInstruction(afterMnemonic, func.__name__, [self.memory.read(self.pc), self.memory.read(self.pc+1)], illegal=illegal)
 
         func(valueAtAddress, address)
         
