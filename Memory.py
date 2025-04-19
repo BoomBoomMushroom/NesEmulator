@@ -71,4 +71,5 @@ class Memory():
         # "lw" b/c it's the initials of someone I like. It's just a file to read the bytes from.
         with open("memory.lw", "wb") as f:
             f.write(self.memory)
+            f.close()
 

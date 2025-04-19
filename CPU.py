@@ -31,124 +31,150 @@ class CPU():
             0x00: self.undefined_instruction,
             0x01: lambda: self.indirectX(2, 6, self.ORA),
             0x02: self.undefined_instruction,
+                0x03: lambda: self.indirectX(2, 8, self.SLO, illegal=True),
                 0x04: lambda: self.zeroPage(2, 3, self.NOP, illegal=True),
             0x05: lambda: self.zeroPage(2, 3, self.ORA),
             0x06: lambda: self.zeroPage(2, 5, self.ASL),
+                0x07: lambda: self.zeroPage(2, 5, self.SLO, illegal=True),
             0x08: lambda: self.implicit(self.PHP),
             0x09: lambda: self.immediate(2, 2, self.ORA),
             0x0A: lambda: self.accumulator(1, 2, self.ASL),
                 0x0C: lambda: self.absolute(3, 4, self.NOP, illegal=True),
             0x0D: lambda: self.absolute(3, 4, self.ORA),
             0x0E: lambda: self.absolute(3, 6, self.ASL),
+                0x0F: lambda: self.absolute(3, 6, self.SLO, illegal=True),
             
             0x10: lambda: self.relative(2, 2, self.BPL),
             0x11: lambda: self.indirectY(2, 5, self.ORA),
             0x12: self.undefined_instruction,
-                0x14: lambda: self.indirectX(2, 4, self.NOP, illegal=True),
+                0x13: lambda: self.indirectY(2, 8, self.SLO, illegal=True),
+                0x14: lambda: self.zeroPageX(2, 4, self.NOP, illegal=True),
             0x15: lambda: self.zeroPageX(2, 4, self.ORA),
             0x16: lambda: self.zeroPageX(2, 6, self.ASL),
+                0x17: lambda: self.zeroPageX(2, 6, self.SLO, illegal=True),
             0x18: lambda: self.implicit(self.CLC),
             0x19: lambda: self.absoluteY(3, 4, self.ORA),
-                0x1A: lambda: self.implicit(self.NOP),
-                0x1C: lambda: self.indirectX(3, 4, self.NOP),
+                0x1A: lambda: self.implicit(self.NOP, illegal=True),
+                0x1B: lambda: self.absoluteY(3, 7, self.SLO, illegal=True),
+                0x1C: lambda: self.absoluteX(3, 4, self.NOP, illegal=True),
             0x1D: lambda: self.absoluteX(3, 4, self.ORA),
             0x1E: lambda: self.absoluteX(3, 7, self.ASL),
+                0x1F: lambda: self.absoluteX(3, 7, self.SLO, illegal=True),
             
             0x20: lambda: self.absolute(0, 6, self.JSR),
             0x21: lambda: self.indirectX(2, 6, self.AND),
             0x22: self.undefined_instruction,
+                0x23: lambda: self.indirectX(2, 5, self.RLA, illegal=True),
             0x24: lambda: self.zeroPage(2, 3, self.BIT),
             0x25: lambda: self.zeroPage(2, 3, self.AND),
             0x26: lambda: self.zeroPage(2, 5, self.ROL),
+                0x27: lambda: self.zeroPage(2, 5, self.RLA, illegal=True),
             0x28: lambda: self.implicit(self.PLP),
             0x29: lambda: self.immediate(2, 2, self.AND),
             0x2A: lambda: self.accumulator(1, 2, self.ROL),
             0x2C: lambda: self.absolute(3, 4, self.BIT),
             0x2D: lambda: self.absolute(3, 4, self.AND),
             0x2E: lambda: self.absolute(3, 6, self.ROL),
-                0x2F: lambda: self.absolute(3, 6, self.RLA),
+                0x2F: lambda: self.absolute(3, 6, self.RLA, illegal=True),
             
             0x30: lambda: self.relative(2, 2, self.BMI),
             0x31: lambda: self.indirectY(2, 5, self.AND),
             0x32: self.undefined_instruction,
-                0x34: lambda: self.indirectX(2, 4, self.NOP),
+                0x33: lambda: self.indirectY(2, 8, self.RLA, illegal=True),
+                0x34: lambda: self.zeroPageX(2, 4, self.NOP, illegal=True),
             0x35: lambda: self.zeroPageX(2, 4, self.AND),
             0x36: lambda: self.zeroPageX(2, 6, self.ROL),
+                0x37: lambda: self.zeroPageX(2, 6, self.RLA, illegal=True),
             0x38: lambda: self.implicit(self.SEC),
             0x39: lambda: self.absoluteY(3, 4, self.AND),
-                0x3A: lambda: self.implicit(self.NOP),
-                0x3C: lambda: self.indirectX(3, 4, self.NOP),
+                0x3A: lambda: self.implicit(self.NOP, illegal=True),
+                0x3B: lambda: self.absoluteY(3, 7, self.RLA, illegal=True),
+                0x3C: lambda: self.absoluteX(3, 4, self.NOP, illegal=True),
             0x3D: lambda: self.absoluteX(3, 4, self.AND),
             0x3E: lambda: self.absoluteX(3, 7, self.ROL),
+                0x3F: lambda: self.absoluteX(3, 7, self.RLA, illegal=True),
             
             0x40: lambda: self.implicit(self.RTI),
             0x41: lambda: self.indirectX(2, 6, self.EOR),
             0x42: self.undefined_instruction,
-                0x43: lambda: self.indirectX(1, 6, self.SRE),
+                0x43: lambda: self.indirectX(2, 8, self.SRE, illegal=True),
                 0x44: lambda: self.zeroPage(2, 3, self.NOP, illegal=True),
             0x45: lambda: self.zeroPage(2, 3, self.EOR),
             0x46: lambda: self.zeroPage(2, 5, self.LSR),
+                0x47: lambda: self.zeroPage(2, 5, self.SRE, illegal=True),
             0x48: lambda: self.implicit(self.PHA),
             0x49: lambda: self.immediate(2, 2, self.EOR),
             0x4A: lambda: self.accumulator(1, 2, self.LSR),
             0x4C: lambda: self.absolute(0, 3, self.JMP),
             0x4D: lambda: self.absolute(3, 4, self.EOR),
             0x4E: lambda: self.absolute(3, 6, self.LSR),
+                0x4F: lambda: self.absolute(3, 6, self.SRE, illegal=True),
             
             0x50: lambda: self.relative(2, 2, self.BVC),
             0x51: lambda: self.indirectY(2, 5, self.EOR),
             0x52: self.undefined_instruction,
-                0x54: lambda: self.indirectX(2, 4, self.NOP),
+                0x53: lambda: self.indirectY(2, 8, self.SRE, illegal=True),
+                0x54: lambda: self.zeroPageX(2, 4, self.NOP, illegal=True),
             0x55: lambda: self.zeroPageX(2, 4, self.EOR),
             0x56: lambda: self.zeroPageX(2, 6, self.LSR),
+                0x57: lambda: self.zeroPageX(2, 6, self.SRE, illegal=True),
             0x58: self.undefined_instruction,
             0x59: lambda: self.absoluteY(3, 4, self.EOR),
-                0x5A: lambda: self.implicit(self.NOP),
-                0x5C: lambda: self.indirectX(3, 4, self.NOP),
+                0x5A: lambda: self.implicit(self.NOP, illegal=True),
+                0x5B: lambda: self.absoluteY(3, 7, self.SRE, illegal=True),
+                0x5C: lambda: self.absoluteX(3, 4, self.NOP, illegal=True),
             0x5D: lambda: self.absoluteX(3, 4, self.EOR),
             0x5E: lambda: self.absoluteX(3, 7, self.LSR),
+                0x5F: lambda: self.absoluteX(3, 7, self.SRE, illegal=True),
             
             0x60: lambda: self.implicit(self.RTS),
             0x61: lambda: self.indirectX(2, 6, self.ADC),
             0x62: self.undefined_instruction,
+                0x63: lambda: self.indirectX(2, 8, self.RRA, illegal=True),
                 0x64: lambda: self.zeroPage(2, 3, self.NOP, illegal=True),
             0x65: lambda: self.zeroPage(2, 3, self.ADC),
             0x66: lambda: self.zeroPage(2, 5, self.ROR),
+                0x67: lambda: self.zeroPage(2, 5, self.RRA, illegal=True),
             0x68: lambda: self.implicit(self.PLA),
             0x69: lambda: self.immediate(2, 2, self.ADC),
             0x6A: lambda: self.accumulator(1, 2, self.ROR),
             0x6C: lambda: self.indirect(0, 5, self.JMP), # 0 bytes b/c of the JMPing we don't want to offset the JMP address
             0x6D: lambda: self.absolute(3, 4, self.ADC),
             0x6E: lambda: self.absolute(3, 6, self.ROR),
+                0x6F: lambda: self.absolute(3, 6, self.RRA, illegal=True),
             
             0x70: lambda: self.relative(2, 2, self.BVS),
             0x71: lambda: self.indirectY(2, 5, self.ADC),
             0x72: self.undefined_instruction,
-                0x74: lambda: self.indirectX(2, 4, self.NOP),
+                0x73: lambda: self.indirectY(2, 8, self.RRA, illegal=True),
+                0x74: lambda: self.zeroPageX(2, 4, self.NOP, illegal=True),
             0x75: lambda: self.zeroPageX(2, 4, self.ADC),
             0x76: lambda: self.zeroPageX(2, 6, self.ROR),
+                0x77: lambda: self.zeroPageX(2, 6, self.RRA, illegal=True),
             0x78: lambda: self.implicit(self.SEI),
             0x79: lambda: self.absoluteY(3, 4, self.ADC),
-                0x7A: lambda: self.implicit(self.NOP),
-                0x7C: lambda: self.indirectX(3, 4, self.NOP),
+                0x7A: lambda: self.implicit(self.NOP, illegal=True),
+                0x7B: lambda: self.absoluteY(3, 7, self.RRA, illegal=True),
+                0x7C: lambda: self.absoluteX(3, 4, self.NOP, illegal=True),
             0x7D: lambda: self.absoluteX(3, 4, self.ADC),
             0x7E: lambda: self.absoluteX(3, 7, self.ROR),
+                0x7F: lambda: self.absoluteX(3, 7, self.RRA, illegal=True),
             
-            0x80: lambda: self.ILLEGAL_OPCODE(2, 1),
+            0x80: lambda: self.immediate(2, 2, self.NOP, illegal=True),
             0x81: lambda: self.indirectX(2, 6, self.STA),
             0x82: lambda: self.ILLEGAL_OPCODE(2, 1),
-                0x83: lambda: self.indirectX(2, 6, self.SAX),
+                0x83: lambda: self.indirectX(2, 6, self.SAX, illegal=True),
             0x84: lambda: self.zeroPage(2, 3, self.STY),
             0x85: lambda: self.zeroPage(2, 3, self.STA),
             0x86: lambda: self.zeroPage(2, 3, self.STX),
-                0x87: lambda: self.zeroPage(2, 3, self.SAX),
+                0x87: lambda: self.zeroPage(2, 3, self.SAX, illegal=True),
             0x88: lambda: self.implicit(self.DEY),
             0x89: self.undefined_instruction,
             0x8A: lambda: self.implicit(self.TXA),
             0x8C: lambda: self.absolute(3, 4, self.STY),
             0x8D: lambda: self.absolute(3, 4, self.STA),
             0x8E: lambda: self.absolute(3, 4, self.STX),
-                0x8F: lambda: self.absolute(3, 4, self.SAX),
+                0x8F: lambda: self.absolute(3, 4, self.SAX, illegal=True),
             
             0x90: lambda: self.relative(2, 2, self.BCC),
             0x91: lambda: self.indirectY(2, 6, self.STA),
@@ -156,7 +182,7 @@ class CPU():
             0x94: lambda: self.zeroPageX(2, 4, self.STY),
             0x95: lambda: self.zeroPageX(2, 4, self.STA),
             0x96: lambda: self.zeroPageY(2, 4, self.STX),
-                0x97: lambda: self.zeroPageY(2, 4, self.SAX),
+                0x97: lambda: self.zeroPageY(2, 4, self.SAX, illegal=True),
             0x98: lambda: self.implicit(self.TYA),
             0x99: lambda: self.absoluteY(3, 5, self.STA),
             0x9A: lambda: self.implicit(self.TXS),
@@ -168,87 +194,100 @@ class CPU():
             0xA1: lambda: self.indirectX(2, 6, self.LDA),
             0xA2: lambda: self.immediate(2, 2, self.LDX),
             0xA4: lambda: self.zeroPage(2, 3, self.LDY),
-                0xA3: lambda: self.indirectX(2, 6, self.LAX),
+                0xA3: lambda: self.indirectX(2, 6, self.LAX, illegal=True),
             0xA5: lambda: self.zeroPage(2, 3, self.LDA),
             0xA6: lambda: self.zeroPage(2, 3, self.LDX),
-                0xA7: lambda: self.zeroPage(2, 3, self.LAX),
+                0xA7: lambda: self.zeroPage(2, 3, self.LAX, illegal=True),
             0xA8: lambda: self.implicit(self.TAY),
             0xA9: lambda: self.immediate(2, 2, self.LDA),
             0xAA: lambda: self.implicit(self.TAX),
             0xAC: lambda: self.absolute(3, 6, self.LDY),
             0xAD: lambda: self.absolute(3, 4, self.LDA),
             0xAE: lambda: self.absolute(3, 4, self.LDX),
-                0xAF: lambda: self.absolute(3, 4, self.LAX),
+                0xAF: lambda: self.absolute(3, 4, self.LAX, illegal=True),
             
             0xB0: lambda: self.relative(2, 2, self.BCS),
             0xB1: lambda: self.indirectY(2, 5, self.LDA),
             0xB2: self.undefined_instruction,
-                0xB3: lambda: self.indirectY(2, 6, self.LAX),
+                0xB3: lambda: self.indirectY(2, 6, self.LAX, illegal=True),
             0xB4: lambda: self.zeroPageX(2, 4, self.LDY),
             0xB5: lambda: self.zeroPageX(2, 4, self.LDA),
             0xB6: lambda: self.zeroPageY(2, 4, self.LDX),
-                0xB7: lambda: self.zeroPageY(2, 4, self.LAX),
+                0xB7: lambda: self.zeroPageY(2, 4, self.LAX, illegal=True),
             0xB8: lambda: self.implicit(self.CLV),
             0xB9: lambda: self.absoluteY(3, 4, self.LDA),
             0xBA: lambda: self.implicit(self.TSX),
             0xBC: lambda: self.absoluteX(3, 4, self.LDY),
             0xBD: lambda: self.absoluteX(3, 4, self.LDA),
             0xBE: lambda: self.absoluteY(3, 4, self.LDX),
-                0xBF: lambda: self.absoluteY(3, 4, self.LAX),
+                0xBF: lambda: self.absoluteY(3, 4, self.LAX, illegal=True),
             
             0xC0: lambda: self.immediate(2, 2, self.CPY),
             0xC1: lambda: self.indirectX(2, 6, self.CMP),
             0xC2: self.undefined_instruction,
-                0xC3: lambda: self.indirectX(2, 8, self.DCP),
+                0xC3: lambda: self.indirectX(2, 8, self.DCP, illegal=True),
             0xC4: lambda: self.zeroPage(2, 3, self.CPY),
             0xC5: lambda: self.zeroPage(2, 3, self.CMP),
             0xC6: lambda: self.zeroPage(2, 5, self.DEC),
+                0xC7: lambda: self.zeroPage(2, 5, self.DCP, illegal=True),
             0xC8: lambda: self.implicit(self.INY),
             0xC9: lambda: self.immediate(2, 2, self.CMP),
             0xCA: lambda: self.implicit(self.DEX),
             0xCC: lambda: self.absolute(3, 4, self.CPY),
             0xCD: lambda: self.absolute(3, 4, self.CMP),
             0xCE: lambda: self.absolute(3, 6, self.DEC),
+                0xCF: lambda: self.absolute(3, 6, self.DCP, illegal=True),
             
             0xD0: lambda: self.relative(2, 2, self.BNE),
             0xD1: lambda: self.indirectY(2, 5, self.CMP),
             0xD2: self.undefined_instruction,
-                0xD4: lambda: self.indirectX(2, 4, self.NOP),
+                0xD3: lambda: self.indirectY(2, 8, self.DCP, illegal=True),
+                0xD4: lambda: self.zeroPageX(2, 4, self.NOP, illegal=True),
             0xD5: lambda: self.zeroPageX(2, 4, self.CMP),
             0xD6: lambda: self.zeroPageX(2, 6, self.DEC),
+                0xD7: lambda: self.zeroPageX(2, 6, self.DCP, illegal=True),
             0xD8: lambda: self.implicit(self.CLD),
             0xD9: lambda: self.absoluteY(3, 4, self.CMP),
-                0xDA: lambda: self.implicit(self.NOP),
-                0xDC: lambda: self.indirectX(3, 4, self.NOP),
+                0xDA: lambda: self.implicit(self.NOP, illegal=True),
+                0xDB: lambda: self.absoluteY(3, 7, self.DCP, illegal=True),
+                0xDC: lambda: self.absoluteX(3, 4, self.NOP, illegal=True),
             0xDD: lambda: self.absoluteX(3, 4, self.CMP),
             0xDE: lambda: self.absoluteX(3, 7, self.DEC),
+                0xDF: lambda: self.absoluteX(3, 7, self.DCP, illegal=True),
             
             0xE0: lambda: self.immediate(2, 2, self.CPX),
             0xE1: lambda: self.indirectX(2, 6, self.SBC),
             0xE2: self.undefined_instruction,
+                0xE3: lambda: self.indirectX(2, 8, self.ISB, illegal=True),
             0xE4: lambda: self.zeroPage(2, 3, self.CPX),
             0xE5: lambda: self.zeroPage(2, 3, self.SBC),
             0xE6: lambda: self.zeroPage(2, 5, self.INC),
+                0xE7: lambda: self.zeroPage(2, 5, self.ISB, illegal=True),
             0xE8: lambda: self.implicit(self.INX),
             0xE9: lambda: self.immediate(2, 2, self.SBC),
             0xEA: lambda: self.implicit(self.NOP),
             0xEC: lambda: self.absolute(3, 4, self.CPX),
-                0xEB: lambda: self.immediate(2, 2, self.SBC), # Same as 0xE9
+                0xEB: lambda: self.immediate(2, 2, self.SBC, illegal=True), # Same as 0xE9, but illegal
             0xED: lambda: self.absolute(3, 4, self.SBC),
             0xEE: lambda: self.absolute(3, 6, self.INC),
+                0xEF: lambda: self.absolute(3, 6, self.ISB, illegal=True),
             
             0xF0: lambda: self.relative(2, 2, self.BEQ),
             0xF1: lambda: self.indirectY(2, 5, self.SBC),
             0xF2: self.undefined_instruction,
-                0xF4: lambda: self.indirectX(2, 4, self.NOP),
+                0xF3: lambda: self.indirectY(2, 8, self.ISB, illegal=True),
+                0xF4: lambda: self.zeroPageX(2, 4, self.NOP, illegal=True),
             0xF5: lambda: self.zeroPageX(2, 4, self.SBC),
             0xF6: lambda: self.zeroPageX(2, 6, self.INC),
+                0xF7: lambda: self.zeroPageX(2, 6, self.ISB, illegal=True),
             0xF8: lambda: self.implicit(self.SED),
             0xF9: lambda: self.absoluteY(3, 4, self.SBC),
-                0xFA: lambda: self.implicit(self.NOP),
-                0xFC: lambda: self.indirectX(3, 4, self.NOP),
+                0xFA: lambda: self.implicit(self.NOP, illegal=True),
+                0xFB: lambda: self.absoluteY(3, 7, self.ISB, illegal=True),
+                0xFC: lambda: self.absoluteX(3, 4, self.NOP, illegal=True),
             0xFD: lambda: self.absoluteX(3, 4, self.SBC),
             0xFE: lambda: self.absoluteX(3, 7, self.INC),
+                0xFF: lambda: self.absoluteX(3, 7, self.ISB, illegal=True),
         }
     
     def reset(self):
@@ -265,7 +304,6 @@ class CPU():
         
     
     def tick(self):
-        self.memory.dumpMemory()
         self.handleQueuedChanges()
         
         #self.executeInstruction()
@@ -424,10 +462,10 @@ class CPU():
     def undefined_instruction(self):
         print("UNDEFINED INSTRUCTION!!!")
         print(f"{hex(self.pc)}: {hex(self.memory.read(self.pc))}")
-        exit()
+        #exit()
 
-    def implicit(self, func):
-        self.logInstruction("", func.__name__, [self.memory.read(self.pc)])
+    def implicit(self, func, illegal=False):
+        self.logInstruction("", func.__name__, [self.memory.read(self.pc)], illegal=illegal)
         
         return func()
 
@@ -437,10 +475,10 @@ class CPU():
         func(self.regA, addr="A")
         return (bytesToRead, cycles)
 
-    def immediate(self, bytesToRead, cycles, func):
+    def immediate(self, bytesToRead, cycles, func, illegal=False):
         value = self.memory.read(self.pc + 1)
         
-        self.logInstruction(f"#${hex(value).split('0x')[1].zfill(2)}", func.__name__, [self.memory.read(self.pc), value])
+        self.logInstruction(f"#${hex(value).split('0x')[1].zfill(2)}", func.__name__, [self.memory.read(self.pc), value], illegal=illegal)
         
         func(value)
         
@@ -462,7 +500,7 @@ class CPU():
     
         return (bytesToRead, cycles)
     
-    def absoluteX(self, bytesToRead, cycles, func):
+    def absoluteX(self, bytesToRead, cycles, func, illegal=False):
         lowByte = self.memory.read(self.pc+1)
         highByte = self.memory.read(self.pc+2)
         
@@ -470,13 +508,13 @@ class CPU():
         valueAddress = (address + self.regX ) % 0x10000
         value = self.memory.read(valueAddress)
         
-        self.logInstruction(f"${hex(address).split('0x')[1].zfill(4)},X @ {hex(valueAddress).split('0x')[1].zfill(4)} = {hex(value).split('0x')[1].zfill(2)}", func.__name__, [self.memory.read(self.pc), lowByte, highByte])
+        self.logInstruction(f"${hex(address).split('0x')[1].zfill(4)},X @ {hex(valueAddress).split('0x')[1].zfill(4)} = {hex(value).split('0x')[1].zfill(2)}", func.__name__, [self.memory.read(self.pc), lowByte, highByte], illegal=illegal)
         
         func(value, addr=valueAddress)
     
         return (bytesToRead, cycles)
     
-    def absoluteY(self, bytesToRead, cycles, func):
+    def absoluteY(self, bytesToRead, cycles, func, illegal=False):
         lowByte = self.memory.read(self.pc + 1)
         highByte = self.memory.read(self.pc + 2)
         
@@ -485,7 +523,7 @@ class CPU():
         
         value = self.memory.read(valueAddress)
         
-        self.logInstruction(f"${hex(address).split('0x')[1].zfill(4)},Y @ {hex(valueAddress).split('0x')[1].zfill(4)} = {hex(value).split('0x')[1].zfill(2)}", func.__name__, [self.memory.read(self.pc), lowByte, highByte])
+        self.logInstruction(f"${hex(address).split('0x')[1].zfill(4)},Y @ {hex(valueAddress).split('0x')[1].zfill(4)} = {hex(value).split('0x')[1].zfill(2)}", func.__name__, [self.memory.read(self.pc), lowByte, highByte], illegal=illegal)
         
         func(value, addr=valueAddress)
     
@@ -515,25 +553,26 @@ class CPU():
         
         return (bytesToRead, cycles)
 
-    def zeroPageX(self, bytesToRead, cycles, func):
+    def zeroPageX(self, bytesToRead, cycles, func, illegal=False):
         # Zero Page but add X to the address
         zpOperand = self.memory.read(self.pc + 1)
         address = (zpOperand + self.regX) % 0x100 # Zero page, make sure the address stays in 1 byte
         valueAtAddress = self.memory.read(address)
         
-        self.logInstruction(f"${hex(zpOperand).split('0x')[1].zfill(2)},X @ {hex(address).split('0x')[1].zfill(2)} = {hex(valueAtAddress).split('0x')[1].zfill(2)}", func.__name__, [self.memory.read(self.pc), zpOperand])
+        self.logInstruction(f"${hex(zpOperand).split('0x')[1].zfill(2)},X @ {hex(address).split('0x')[1].zfill(2)} = {hex(valueAtAddress).split('0x')[1].zfill(2)}", func.__name__, [self.memory.read(self.pc), zpOperand], illegal=illegal)
         
         func(valueAtAddress, address)
         
         return (bytesToRead, cycles)
 
-    def zeroPageY(self, bytesToRead, cycles, func):
+    def zeroPageY(self, bytesToRead, cycles, func, illegal=False):
         # Zero Page but add Y to the address
         zpOperand = self.memory.read(self.pc + 1)
         address = (zpOperand + self.regY) % 0x100 # Zero page, make sure the address stays in 1 byte
         valueAtAddress = self.memory.read(address)
         
-        self.logInstruction(f"${hex(zpOperand).split('0x')[1].zfill(2)},Y @ {hex(address).split('0x')[1].zfill(2)} = {hex(valueAtAddress).split('0x')[1].zfill(2)}", func.__name__, [self.memory.read(self.pc), zpOperand])
+        afterMnemonic = f"${hex(zpOperand).split('0x')[1].zfill(2)},Y @ {hex(address).split('0x')[1].zfill(2)} = {hex(valueAtAddress).split('0x')[1].zfill(2)}"
+        self.logInstruction(afterMnemonic, func.__name__, [self.memory.read(self.pc), zpOperand], illegal=illegal)
         
         func(valueAtAddress, address)
         
@@ -574,7 +613,7 @@ class CPU():
         
         return (bytesToRead, cycles)
 
-    def indirectY(self, bytesToRead, cycles, func):
+    def indirectY(self, bytesToRead, cycles, func, illegal=False):
         # Zero page, then add Y to the extracted address
         addressLocationInMemory = self.memory.read(self.pc + 1)
         # Wrap around the zero page if we go out of it
@@ -587,9 +626,9 @@ class CPU():
 
         afterMnemonic = f"(${hex(self.memory.read(self.pc+1)).split('0x')[1].zfill(2)}),Y = {hex(address).split('0x')[1].zfill(4)}"
         afterMnemonic += f" @ {hex(addressWithY).split('0x')[1].zfill(4)} = {hex(valueAtAddress).split('0x')[1].zfill(2)}"
-        self.logInstruction(afterMnemonic, func.__name__, [self.memory.read(self.pc), self.memory.read(self.pc+1)])
+        self.logInstruction(afterMnemonic, func.__name__, [self.memory.read(self.pc), self.memory.read(self.pc+1)], illegal=illegal)
         
-        func(valueAtAddress, address)
+        func(valueAtAddress, addressWithY)
         
         return (bytesToRead, cycles)
 
@@ -1016,22 +1055,14 @@ class CPU():
         return (bytesToRead, cycles)
     
     
-    def RLA(self, value, addr=None):
-        ROL_Value = (value << 1) % 0x100
-        ROL_Value |= self.carryFlag
-        self.carryFlag = (value & 0b10000000)
-        self.memory.write(addr, ROL_Value)
-        
-        AND_Value = self.regA & ROL_Value
-        self.regA = AND_Value
-        self.updateZeroFlag(AND_Value)
-        self.updateNegativeFlag(AND_Value)
     
-    def SRE(self, value, addr=None):
+    def SRE(self, value, addr=None): # LSR value then EOR value
+        # LSR
         LSR_Value = (value >> 1) % 0x100
         self.carryFlag = (value & 0b00000001)
         self.memory.write(addr, LSR_Value)
         
+        # EOR
         EOR_Value = self.regA ^ LSR_Value
         self.regA = EOR_Value
         self.updateZeroFlag(EOR_Value)
@@ -1054,9 +1085,84 @@ class CPU():
         self.memory.write(addr, DEC_Value)
 
         # CMP
-        subtractResult = self.regA - value
+        subtractResult = self.regA - DEC_Value
         if subtractResult < 0: subtractResult += 128 * 2 # Make it so it is negative in twos complement
         
-        self.carryFlag = (self.regA >= value)
-        self.zeroFlag = (self.regA == value)
+        self.carryFlag = 1 if (self.regA >= DEC_Value) else 0
+        self.zeroFlag = 1 if (self.regA == DEC_Value) else 0
         self.updateNegativeFlag(subtractResult)
+        
+    def ISB(self, value, addr=None): # ISC, but NESTEST wants it to be called ISB | INC + SBC
+        # INC
+        INC_Value = (self.memory.read(addr) + 1) % 0x100
+        self.memory.write(addr, INC_Value)
+        
+        # SBC
+        initRegA = self.regA + 0
+        
+        # A = A - memory - ~C, or equivalently: A = A + ~memory + C
+        invertedCarry = 0 if self.carryFlag == 1 else 1
+        
+        result = self.regA - INC_Value - invertedCarry
+        resultFixed = result % 0x100
+        self.regA = resultFixed
+        
+        self.carryFlag = 0 if result < 0x00 else 1 # Same as ~(result < 0x00)
+        self.updateZeroFlag(resultFixed)
+        # If result's sign is different from A's and the same as memory's, signed overflow (or underflow) occurred
+        self.overflowFlag = 1 if (result & 0x80 != initRegA & 0x80) and (result & 0x80 == INC_Value & 0x80) else 0
+        self.updateNegativeFlag(resultFixed)
+    
+    def SLO(self, value, addr=None): # ASL value then ORA value
+        # ASL
+        ASL_Result = (value << 1) % 0x100
+        
+        self.memory.write(addr, ASL_Result)
+        
+        self.carryFlag = (value & 0b10000000) >> 7
+        
+        # ORA
+        ORA_Result = self.regA | ASL_Result
+        self.regA = ORA_Result
+        
+        self.updateZeroFlag(ORA_Result)
+        self.updateNegativeFlag(ORA_Result)
+    
+    def RLA(self, value, addr=None): # ROL value then AND value
+        # ROL
+        ROL_Result = (value << 1) % 0x100
+        ROL_Result |= self.carryFlag # Carry is put into bit 0
+
+        self.memory.write(addr, ROL_Result)
+        self.carryFlag = (value & 0b10000000) >> 7
+        
+        # AND
+        AND_Result = self.regA & ROL_Result
+        self.regA = AND_Result
+        
+        # 11100101 , 01100101
+        self.updateZeroFlag(AND_Result)
+        self.updateNegativeFlag(AND_Result)
+    
+    def RRA(self, value, addr=None): # ROR value then ADC value
+        # ROR
+        ROR_Result = (value >> 1) % 0x100
+        ROR_Result |= (self.carryFlag << 7)
+
+        self.memory.write(addr, ROR_Result)
+        
+        self.carryFlag = (value & 0b00000001)
+        
+        # 01100101 , 00100101
+        
+        # ADC
+        initRegA = self.regA + 0
+        ADC_result = self.regA + ROR_Result + self.carryFlag
+        ADC_resultFixed = ADC_result % 0x100
+        self.regA = ADC_resultFixed
+        
+        self.carryFlag = 1 if ADC_result > 0xff else 0
+        self.updateZeroFlag(ADC_resultFixed)
+        # The result's sign is different than the value AND reg A meaning "signed overflow (or underflow) occurred." (https://www.nesdev.org/wiki/Instruction_reference#ADC)
+        self.overflowFlag = 1 if (ADC_result & 0x80 != initRegA & 0x80) and (ADC_result & 0x80 != ROR_Result & 0x80) else 0
+        self.updateNegativeFlag(ADC_resultFixed)
