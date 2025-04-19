@@ -31,13 +31,13 @@ class CPU():
             0x00: self.undefined_instruction,
             0x01: lambda: self.indirectX(2, 6, self.ORA),
             0x02: self.undefined_instruction,
-                0x04: lambda: self.zeroPage(2, 3, self.NOP),
+                0x04: lambda: self.zeroPage(2, 3, self.NOP, illegal=True),
             0x05: lambda: self.zeroPage(2, 3, self.ORA),
             0x06: lambda: self.zeroPage(2, 5, self.ASL),
             0x08: lambda: self.implicit(self.PHP),
             0x09: lambda: self.immediate(2, 2, self.ORA),
             0x0A: lambda: self.accumulator(1, 2, self.ASL),
-                0x0C: lambda: self.absolute(3, 4, self.NOP),
+                0x0C: lambda: self.absolute(3, 4, self.NOP, illegal=True),
             0x0D: lambda: self.absolute(3, 4, self.ORA),
             0x0E: lambda: self.absolute(3, 6, self.ASL),
             
@@ -85,7 +85,7 @@ class CPU():
             0x41: lambda: self.indirectX(2, 6, self.EOR),
             0x42: self.undefined_instruction,
                 0x43: lambda: self.indirectX(1, 6, self.SRE),
-                0x44: lambda: self.zeroPage(2, 3, self.NOP),
+                0x44: lambda: self.zeroPage(2, 3, self.NOP, illegal=True),
             0x45: lambda: self.zeroPage(2, 3, self.EOR),
             0x46: lambda: self.zeroPage(2, 5, self.LSR),
             0x48: lambda: self.implicit(self.PHA),
@@ -111,7 +111,7 @@ class CPU():
             0x60: lambda: self.implicit(self.RTS),
             0x61: lambda: self.indirectX(2, 6, self.ADC),
             0x62: self.undefined_instruction,
-                0x64: lambda: self.zeroPage(2, 3, self.NOP),
+                0x64: lambda: self.zeroPage(2, 3, self.NOP, illegal=True),
             0x65: lambda: self.zeroPage(2, 3, self.ADC),
             0x66: lambda: self.zeroPage(2, 5, self.ROR),
             0x68: lambda: self.implicit(self.PLA),
@@ -350,7 +350,7 @@ class CPU():
     def updateNegativeFlag(self, value):
         self.negativeFlag = (value & 0b10000000) >> 7 # get bit 7 (zero indexed)
 
-    def logInstruction(self, addressing, instruction, bytesRead):
+    def logInstruction(self, addressing, instruction, bytesRead, illegal=False):
         if self.logsEnabled == False: return False
         
         bytesReadString = [ hex(b).split('0x')[1].zfill(2) for b in bytesRead ]
@@ -366,7 +366,8 @@ class CPU():
                     (self.zeroFlag << 1) | 
                     (self.carryFlag << 0) )
         
-        line = f"{hex(self.pc).split('0x')[1].zfill(4)}  {' '.join(bytesReadString)}  {instruction} {addressing}"
+        isIllegal = "*" if illegal else " "
+        line = f"{hex(self.pc).split('0x')[1].zfill(4)}  {' '.join(bytesReadString)} {isIllegal}{instruction} {addressing}"
         line += " " * (48 - len(line)) # Make sure the line is 48 characters long before adding registers
         line += f"A:{hex(self.regA).split('0x')[1].zfill(2)} X:{hex(self.regX).split('0x')[1].zfill(2)} Y:{hex(self.regY).split('0x')[1].zfill(2)}"
         line += f" P:{hex(flagByte).split('0x')[1].zfill(2)} SP:{hex(self.stackPointer).split('0x')[1].zfill(2)} PPU:  0, 21 CYC:7"
@@ -502,12 +503,12 @@ class CPU():
         
         return (bytesToRead + addBytes, cycles + addCycles)
 
-    def zeroPage(self, bytesToRead, cycles, func):
+    def zeroPage(self, bytesToRead, cycles, func, illegal=False):
         # high byte is assumed to be 0x00, so the low byte (next byte) is the entire address
         address = self.memory.read(self.pc + 1)
         valueAtAddress = self.memory.read(address)
         
-        self.logInstruction(f"${hex(address).split('0x')[1].zfill(2)} = {hex(valueAtAddress).split('0x')[1].zfill(2)}", func.__name__, [self.memory.read(self.pc), address])
+        self.logInstruction(f"${hex(address).split('0x')[1].zfill(2)} = {hex(valueAtAddress).split('0x')[1].zfill(2)}", func.__name__, [self.memory.read(self.pc), address], illegal=illegal)
         
         func(valueAtAddress, address)
         #func(address)
